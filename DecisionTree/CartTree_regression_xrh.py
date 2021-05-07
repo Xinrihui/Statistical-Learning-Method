@@ -498,7 +498,7 @@ class RegresionTree_GBDT():
 
         self.max_depth = max_depth  # 树的最大深度
 
-        self.min_sample_split=min_sample_split
+        self.min_sample_split=min_sample_split # TODO: 未使用
 
         self.print_log=print_log #是否打印日志
 
@@ -589,15 +589,6 @@ class RegresionTree_GBDT():
         return Ag, Ag_split, min_square_loss, Ag_c1, Ag_c2
 
 
-    # def update_leaf_values(self, targets, y):
-    #     numerator = targets.sum()
-    #     if numerator == 0:
-    #         return 0.0
-    #     denominator = ((y - targets) * (1 - y + targets)).sum()
-    #     if abs(denominator) < 1e-150:
-    #         return 0.0
-    #     else:
-    #         return numerator / denominator
 
     def update_leaf_region_lable(self, trainLabelArr,origin_trainLabelArr):
         """

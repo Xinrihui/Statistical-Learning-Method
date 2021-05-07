@@ -11,6 +11,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 from sklearn import ensemble
 
+from scipy.special import expit, logsumexp
+
 
 from CartTree_regression_xrh import *
 
@@ -320,12 +322,11 @@ class GBDT_MultiClassifier:
     test1: 多分类任务
 
     数据集：Mnist
-    参数: error_rate_threshold=0.01, max_iter=30, max_depth=3 , learning_rate=0.8
-
+    参数: error_rate_threshold=0.01, max_iter=20, max_depth=3 , learning_rate=0.5
     训练集数量：60000
     测试集数量：10000
-    正确率： 0.857
-    模型训练时长：76907s
+    正确率： 0.915
+    模型训练时长：1542s
 
     """
 
@@ -363,11 +364,11 @@ class GBDT_MultiClassifier:
     #     :param X:
     #     :return:
     #     """
-    #     #TODO: 会导致 上溢出 和 下溢出的问题
+    #     #TODO: 导致 上溢出 和 下溢出 问题
     #
     #     return  np.exp(X) / np.sum( np.exp(X) , axis=0 )  # softmax处理，将结果转化为概率
 
-    def softmax(self,X):
+    def softmax_deprecated(self,X):
         """
         softmax处理，将结果转化为概率
 
@@ -383,6 +384,23 @@ class GBDT_MultiClassifier:
         X= X-X_max
 
         return  np.exp(X) / np.sum( np.exp(X) , axis=0 )  # softmax处理，将结果转化为概率
+
+    def softmax(self,X):
+        """
+        softmax处理，将结果转化为概率
+
+        解决了 softmax的 溢出问题
+
+        np.nan_to_num : 使用0代替数组x中的nan元素，使用有限的数字代替inf元素
+
+        ref: sklearn 源码
+            MultinomialDeviance -> def negative_gradient
+
+        :param X: shape (K,N)
+        :return: shape (N,)
+        """
+
+        return  np.nan_to_num( np.exp(X - logsumexp(X, axis=0)) )  # softmax处理，将结果转化为概率
 
     def fit(self, X, y, learning_rate):
         """
@@ -429,7 +447,7 @@ class GBDT_MultiClassifier:
                 r = y_one_hot[k] - p[k]   # 残差 shape:(N,)
 
                 # 训练 用于 2分类的 回归树
-                DT = RegresionTree_GBDT(min_square_loss=0.1, max_depth=self.max_depth,print_log=False)
+                DT = RegresionTree_GBDT(min_square_loss=0.1, max_depth=self.max_depth,print_log=True)
 
                 DT.fit(X, r, y_one_hot[k], feature_value_set=feature_value_set)
 
@@ -975,6 +993,8 @@ class Test:
         # 返回数据集和标记
         return dataArr, labelArr
 
+
+
     def test_Mnist_dataset(self, n_train, n_test):
         """
          Mnist (手写数字) 数据集
@@ -999,18 +1019,48 @@ class Test:
         start = time.time()
 
         """
-        使用 sklearn 库测试, max_depth=3, n_estimators=30, learning_rate=0.8, 
+        调参：
+        loss：损失函数。有deviance和exponential两种。deviance是采用对数似然，exponential是指数损失，后者相当于AdaBoost。
+        n_estimators:最大弱学习器个数，默认是100，调参时要注意过拟合或欠拟合，一般和learning_rate一起考虑。
+        criterion: 切分叶子节点时, 选择切分特征考虑的误差函数, 默认是 “ friedman_mse”（ Friedman 均方误差），“ mse”（均方误差）和“ mae”（均绝对误差）
+        learning_rate:步长，即每个弱学习器的权重缩减系数，默认为0.1，取值范围0-1，当取值为1时，相当于权重不缩减。较小的learning_rate相当于更多的迭代次数。
+        subsample:子采样，默认为1，取值范围(0,1]，当取值为1时，相当于没有采样。小于1时，即进行采样，按比例采样得到的样本去构建弱学习器。这样做可以防止过拟合，但是值不能太低，会造成高方差。
+        init：初始化弱学习器。不使用的话就是第一轮迭代构建的弱学习器.如果没有先验的话就可以不用管
+        由于GBDT使用CART回归决策树。以下参数用于调优弱学习器，主要都是为了防止过拟合
+        max_feature：树分裂时考虑的最大特征数，默认为None，也就是考虑所有特征。可以取值有：log2,auto,sqrt
+        max_depth：CART最大深度，默认为None
+        min_sample_split：划分节点时需要保留的样本数。当某节点的样本数小于某个值时，就当做叶子节点，不允许再分裂。默认是2
+        min_sample_leaf：叶子节点最少样本数。如果某个叶子节点数量少于某个值，会同它的兄弟节点一起被剪枝。默认是1
+        min_weight_fraction_leaf：叶子节点最小的样本权重和。如果小于某个值，会同它的兄弟节点一起被剪枝。一般用于权重变化的样本。默认是0
+        min_leaf_nodes：最大叶子节点数
+        
+        ref: https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.GradientBoostingClassifier.html
+        
+        测试1: 
+        max_depth=3, n_estimators=30, learning_rate=0.8, 
+        n_train=60000
+        n_test=10000
         训练时间 : 795.5719292163849
         准确率: 0.8883 
+        
+        测试2:
+        max_depth=3, n_estimators=20, learning_rate=0.5, 
+        n_train=60000
+        n_test=10000
+        训练时间 : 589 s
+        准确率: 0.9197 
+        
         """
 
-        # clf = GradientBoostingClassifier(loss='deviance',n_estimators=30, learning_rate=0.8,
-        #                                  max_depth=3)
-        #
-        # clf.fit(trainDataArr, trainLabelArr)
+        clf = GradientBoostingClassifier(loss='deviance',criterion='mse', n_estimators=20, learning_rate=0.5,
+                                         max_depth=3)
 
-        clf = GBDT_MultiClassifier( error_rate_threshold=0.01, max_iter=30, max_depth=3 )
-        clf.fit(trainDataArr, trainLabelArr,learning_rate=0.8)
+        clf.fit(trainDataArr, trainLabelArr)
+
+
+
+        # clf = GBDT_MultiClassifier( error_rate_threshold=0.01, max_iter=20, max_depth=3 )
+        # clf.fit( trainDataArr, trainLabelArr,learning_rate= 0.5 ) #
 
         # 结束时间
         end = time.time()
@@ -1033,12 +1083,12 @@ class Test:
         # 将数据集一分为二，训练数据占80%，测试数据占20%
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
-        clf = GradientBoostingClassifier(loss='deviance',n_estimators=3, learning_rate=0.8,
-                                         max_depth=1, random_state=0)
-        clf.fit(X_train, y_train)
+        # clf = GradientBoostingClassifier(loss='deviance',n_estimators=3, learning_rate=0.1,
+        #                                  max_depth=2)
+        # clf.fit(X_train, y_train)
 
-        # clf = GDBT_MultiClassifier( error_rate_threshold=0.01, max_iter=3, max_depth=1 )
-        # clf.fit(X_train, y_train,learning_rate=0.8)
+        clf = GBDT_MultiClassifier( error_rate_threshold=0.01, max_iter=5, max_depth=3 )
+        clf.fit(X_train, y_train,learning_rate=0.8)
 
         print(clf.score(X_test, y_test))
 
