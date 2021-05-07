@@ -68,7 +68,7 @@ class XGBoost_v1:
         # 最大迭代次数
         self.max_iter = max_iter
 
-        # CART 回归树 的最大深度
+        # CART 回归树 的最大深
         self.max_depth = max_depth
 
         self.G = []  # 弱分类器 集合
