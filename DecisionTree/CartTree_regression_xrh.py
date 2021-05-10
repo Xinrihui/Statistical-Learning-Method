@@ -245,13 +245,14 @@ class RegresionTree():
 
     """
 
-    def __init__(self, root=None, threshold=0.2, max_depth=1):
+    def __init__(self, root=None, threshold=0.2, max_depth=1,print_log=True):
 
         self.root = root
         self.threshold = threshold  # 损失的 阈值
 
         self.max_depth = max_depth  #
 
+        self.print_log=print_log
 
     @staticmethod
     def get_feature_value_set(trainDataArr):
@@ -316,8 +317,8 @@ class RegresionTree():
             trainDataArr_DevFeature = trainDataArr[:, A_j]
 
             # s_i 将数据集 划分为两半 R1 和 R2
-            R1 = trainLabelArr[trainDataArr_DevFeature < s_i]  # 特征值 取值为 <= s_i
-            R2 = trainLabelArr[trainDataArr_DevFeature >= s_i]
+            R1 = trainLabelArr[trainDataArr_DevFeature <= s_i]  # 特征值 取值为 <= s_i
+            R2 = trainLabelArr[trainDataArr_DevFeature > s_i]
 
             c1 = np.mean(R1)
             c2 = np.mean(R2)
@@ -369,13 +370,13 @@ class RegresionTree():
                 T.childs[0] = self.__build_tree([],
                                                 [], feature_value_set-{(best_feature_value)}, tree_depth + 1,
                                                 prev_feature=T.feature,
-                                                prev_feature_split='<' + str(Ag_split),
+                                                prev_feature_split='<=' + str(Ag_split),
                                                 father_label=Ag_c1)  # 左边的均值 作为下一个节点的标签值
 
                 T.childs[1] = self.__build_tree([],
                                                 [], feature_value_set-{(best_feature_value)}, tree_depth + 1,
                                                 prev_feature=T.feature,
-                                                prev_feature_split='>=' + str(Ag_split),
+                                                prev_feature_split='>' + str(Ag_split),
                                                 father_label=Ag_c2)  # 右边的均值 作为下一个节点的标签值
             else:
 
@@ -385,29 +386,31 @@ class RegresionTree():
 
                 # 二叉树 只有左右两个节点
                 # 　小于等于　切分点
-                T.childs[0] = self.__build_tree(trainDataArr[trainDataArr_DevFeature < Ag_split],
-                                                trainLabelArr[trainDataArr_DevFeature < Ag_split],
+                T.childs[0] = self.__build_tree(trainDataArr[trainDataArr_DevFeature <= Ag_split],
+                                                trainLabelArr[trainDataArr_DevFeature <= Ag_split],
                                                 feature_value_set - {(best_feature_value)},
                                                 tree_depth + 1,
                                                 prev_feature=T.feature,
-                                                prev_feature_split='<' + str(Ag_split), father_label=Ag_c1)
+                                                prev_feature_split='<=' + str(Ag_split), father_label=Ag_c1)
 
                 # 大于 切分点
-                T.childs[1] = self.__build_tree(trainDataArr[trainDataArr_DevFeature >= Ag_split],
-                                                trainLabelArr[trainDataArr_DevFeature >= Ag_split],
+                T.childs[1] = self.__build_tree(trainDataArr[trainDataArr_DevFeature > Ag_split],
+                                                trainLabelArr[trainDataArr_DevFeature > Ag_split],
                                                 feature_value_set - {(best_feature_value)},
                                                 tree_depth + 1,
                                                 prev_feature=T.feature,
-                                                prev_feature_split='>=' + str(Ag_split), father_label=Ag_c2)
+                                                prev_feature_split='>' + str(Ag_split), father_label=Ag_c2)
 
-        print('T.feature:{}'.format(T.feature))
-        print('T.prev_feature:{},T.prev_feature_split:{} '.format(T.prev_feature, T.prev_feature_split))
+        if self.print_log:  #
 
-        print('depth:{} '.format(tree_depth))
-        # print('T.childs:{}'.format(T.childs))
-        print('T.label:{}'.format(T.label))
+            print('T.feature:{}'.format(T.feature))
+            print('T.prev_feature:{},T.prev_feature_split:{} '.format(T.prev_feature, T.prev_feature_split))
 
-        print('-----------')
+            print('depth:{} '.format(tree_depth))
+            # print('T.childs:{}'.format(T.childs))
+            print('T.label:{}'.format(T.label))
+
+            print('-----------')
 
         return T
 
@@ -985,7 +988,7 @@ class RegresionTree_XGBoost():
             if len(feature_value_set) == 0 \
                     or np.shape(trainDataArr)[0] <= self.min_sample_split \
                     or tree_depth >= self.max_depth \
-                    or prev_max_gain <= self.gama: # TODO: 回归时 , max_gain 将小于 0 , 若 self.gama=0 则不再继续分裂,导致树的高度过低, 模型欠拟合
+                    or prev_max_gain <= self.gama:
 
             # len(feature_value_set) == 0 : 所有 切分(特征, 特征值) 的组合 已经用完,
             #  np.shape(trainDataArr)[0] <= self.min_sample_split 划分节点时需要保留的样本数。当某节点的样本数小于某个值时，就当做叶子节点，不允许再分裂

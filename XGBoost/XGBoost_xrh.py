@@ -64,7 +64,8 @@ class XGBoost_v1:
 
     """
 
-    def __init__(self, error_rate_threshold=0.05 ,
+    def __init__(self,  print_log=False,
+                        error_rate_threshold=0.05 ,
                         max_iter=10,
                         max_depth=1,
                         objective='binary:logistic',
@@ -73,8 +74,9 @@ class XGBoost_v1:
                         gama=0.0,
                         reg_lambda=1.0 ):
         """
-
-        :param error_rate_threshold: 训练中止条件, 若当前得到的基分类器的组合 的错误率 小于阈值, 则停止训练
+        :param print_log: 打印 Cart树
+        :param error_rate_threshold: 训练中止条件, 若当前得到的基分类器的组合 的错误率 小于阈值, 则停止训练;
+                                     若为 回归问题, 错误率为 MSE (平均 平方损失)
         :param max_iter: 最大迭代次数
         :param max_depth: CART 回归树 的最大深度
 
@@ -90,6 +92,8 @@ class XGBoost_v1:
 
         """
         self.N=0 # 训练集的样本个数
+
+        self.print_log = print_log
 
         # 训练中止条件 error_rate  < self.error_rate_threshold ( 若当前得到的基分类器的组合 的错误率 小于阈值, 则停止训练)
         self.error_rate_threshold = error_rate_threshold
@@ -167,6 +171,8 @@ class XGBoost_v1:
         g : 损失函数 对 F 的一阶梯度 , 相当于 GBDT 中的残差 r
         h: 损失函数 对 F 的 二阶梯度
 
+        ref: https://www.cnblogs.com/nxf-rabbit75/p/10440805.html
+
         :param y:
         :param y_predict:
         :return:
@@ -175,9 +181,14 @@ class XGBoost_v1:
 
         if self.objective ==  "reg:squarederror": # 回归
 
-            g = y_predict - y
+        # TODO: 若采用:
+        #     g =  y - y_predict
+        #     h=  -np.ones_like(g)
+        #   将导致 计算的 max_gain<0 ,  由于 max_gain < self.gama  所以 节点不再继续分裂,导致树的高度过低, 模型欠拟合
 
+            g = y_predict - y
             h=  np.ones_like(g)
+
 
         elif self.objective == "binary:logistic": # 二分类
             g = y_predict - y
@@ -203,21 +214,23 @@ class XGBoost_v1:
 
         return y_predict
 
-    def cal_train_error(self,y,y_predict):
+    def model_error_rate(self,y,y_predict):
         """
+        计算 当前 所有弱分类器加权 得到的 最终分类器 的 误差率
 
-        计算 当前 所有弱分类器加权 得到的 最终分类器 的 分类错误率
+        若为 回归问题, 误差率 为 平均平方误差损失 ( MSE = mean_squared_error )
 
-        :param F:
+        :param y:
+        :param y_predict:
         :return:
         """
         N = len(y)
 
-        err_rate=None
+        error_rate=None
 
         if self.objective == "reg:squarederror":  # 回归
 
-            err_rate = np.average(np.square(y_predict - y)) # 平均 平方误差损失 ( mean_squared_error )
+            error_rate = np.average(np.square(y_predict - y)) #  error_rate  为 平均平方误差损失 ( mean_squared_error )
 
         elif self.objective == "binary:logistic":  # 二分类
 
@@ -226,9 +239,10 @@ class XGBoost_v1:
 
             err_arr = np.ones(N, dtype=int)
             err_arr[y_predict == y] = 0
-            err_rate = np.mean(err_arr)
 
-        return err_rate
+            error_rate = np.mean(err_arr) # loss 为 分类错误率
+
+        return error_rate
 
     def fit(self, X, y ,learning_rate,train_error=True):
         """
@@ -247,7 +261,6 @@ class XGBoost_v1:
         if self.objective == "binary:logistic" or 'reg:squarederror': # 二分类 or 回归
 
             F_0 = self.base_score
-            # F_0 = np.mean(y) # TODO:
 
             self.G.append(F_0)
 
@@ -261,7 +274,7 @@ class XGBoost_v1:
 
                 g,h = self.cal_g_h( y,y_predict )
 
-                RT = RegresionTree_XGBoost(gama=self.gama,reg_lambda=self.reg_lambda, max_depth=self.max_depth, print_log=True)
+                RT = RegresionTree_XGBoost(gama=self.gama,reg_lambda=self.reg_lambda, max_depth=self.max_depth, print_log=self.print_log)
 
                 RT.fit( X, g, h, feature_value_set=feature_value_set )
 
@@ -277,12 +290,12 @@ class XGBoost_v1:
 
                     y_predict_copy = y_predict.copy() # y_predict 下一轮迭代 还要使用, 不能被修改
 
-                    err_rate= self.cal_train_error(y,y_predict_copy)
+                    error_rate= self.model_error_rate(y,y_predict_copy)
 
-                    print( 'round:{}, err_rate:{}'.format( m, err_rate ) )
+                    print( 'round:{}, error_rate :{}'.format( m, error_rate ) )
                     print( '======================' )
 
-                    if err_rate < self.error_rate_threshold:  # 错误率 已经小于 阈值, 则停止训练
+                    if error_rate < self.error_rate_threshold:  # 错误率 已经小于 阈值, 则停止训练
                         break
 
 
@@ -330,9 +343,9 @@ class XGBoost_v1:
 
         y_predict = self.predict(X)
 
-        err_rate=self.cal_train_error(y,y_predict)
+        loss=self.model_error_rate(y,y_predict)
 
-        return err_rate
+        return loss
 
 
 class Test:
@@ -406,7 +419,12 @@ class Test:
         start = time.time()
         print('start create model')
 
-        clf = XGBoost_v1( error_rate_threshold=0.01,objective='reg:squarederror', max_iter=100, max_depth=3,gama=0.0,reg_lambda=0.0 )
+        clf = XGBoost_v1( error_rate_threshold=0.1,
+                          objective='reg:squarederror',
+                          max_iter=100,
+                          max_depth=3,
+                          gama=1.0,
+                          reg_lambda=0.0 )
         clf.fit( X_train, y_train,learning_rate=0.1 )
 
         print(' model complete ')

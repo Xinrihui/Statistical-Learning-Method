@@ -80,7 +80,7 @@ class GBDT_Regressor:
 
             r = y - f  # 残差
 
-            RT = RegresionTree(threshold=0.01, max_depth=self.max_depth)
+            RT = RegresionTree(threshold=0.01, max_depth=self.max_depth,print_log=False)
 
             # RT=DecisionTreeRegressor(max_depth=self.max_depth)  # sklearn 的 回归树
 
@@ -1103,9 +1103,9 @@ class Test:
 if __name__ == '__main__':
     test = Test()
 
-    test.test_tiny_regress_dataset()
+    # test.test_tiny_regress_dataset()
 
-    # test.test_regress_dataset()
+    test.test_regress_dataset()
 
     # test.test_Mnist_dataset_2classification(60000,10000)
 
