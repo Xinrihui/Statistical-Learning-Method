@@ -1,7 +1,7 @@
 import numpy as np
 
 import time
-
+from deprecated import deprecated
 from sklearn.ensemble import GradientBoostingClassifier
 
 from sklearn import datasets
@@ -68,6 +68,7 @@ class GBDT_Regressor:
         f = 0  # 基分类器 的加权和
 
         y_predict = np.mean(y)
+        # y_predict =0
 
         self.G.append(y_predict)
 
@@ -96,6 +97,8 @@ class GBDT_Regressor:
             square_loss = np.average(np.square(f - y))  # 平方误差损失
 
             print('round:{}, square_loss:{}'.format(m, square_loss))
+
+            print('======================')
 
             if square_loss < self.square_loss_threshold:  # 错误率 已经小于 阈值, 则停止训练
                 break
@@ -221,7 +224,9 @@ class GBDT_2Classifier:
 
             G = self.sigmoid(f)
 
-            #TODO: 负例 设置为 -1 会导致 在训练集的 训练误差率无法下降, 原因未知
+            #TODO: 负例 设置为 -1 会导致 在训练集的 训练误差率无法下降 \
+            #     原因： 二分类时 ,默认 y = {0,1},  若要 改为 y={-1,1} 则 损失函数 要使用另外的形式
+
 
             G[G >= 0.5] = 1  # 概率 大于 0.5 被标记为 正例
             G[G < 0.5] = 0  # 概率 小于 0.5 被标记为 负例
@@ -357,18 +362,20 @@ class GBDT_MultiClassifier:
         """
         return 1 / (1 + np.exp(-X))
 
-    # def softmax_deprecated(self,X):
-    #     """
-    #     softmax处理，将结果转化为概率
-    #
-    #     :param X:
-    #     :return:
-    #     """
-    #     #TODO: 导致 上溢出 和 下溢出 问题
-    #
-    #     return  np.exp(X) / np.sum( np.exp(X) , axis=0 )  # softmax处理，将结果转化为概率
+    @deprecated(version='1.0', reason="You should use another function")
+    def softmax_v1_0(self,X):
+        """
+        softmax处理，将结果转化为概率
 
-    def softmax_deprecated(self,X):
+        :param X:
+        :return:
+        """
+        #TODO: 导致 上溢出 和 下溢出 问题
+
+        return  np.exp(X) / np.sum( np.exp(X) , axis=0 )  # softmax处理，将结果转化为概率
+
+    @deprecated(version='1.1', reason="You should use another function")
+    def softmax_v1_1(self,X):
         """
         softmax处理，将结果转化为概率
 
@@ -585,7 +592,7 @@ class Test:
         # 创建决策树
         print('start create model')
 
-        clf = GBDT_Regressor(max_iter=10, max_depth=3)
+        clf = GBDT_Regressor(max_iter=5, max_depth=3)
         clf.fit(X, y, learning_rate=0.1)
 
         print(' model complete ')
@@ -621,8 +628,8 @@ class Test:
         X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.9, test_size=0.1, random_state=188)
 
         # 实例化估计器对象
-        params = {'n_estimators': 500, 'max_depth': 4, 'min_samples_split': 2,
-                  'learning_rate': 0.01, 'loss': 'ls'}
+        params = {'n_estimators': 100, 'max_depth': 3, 'min_samples_split': 2,
+                  'learning_rate': 0.1, 'loss': 'ls'}
         gbr = ensemble.GradientBoostingRegressor(**params)
 
         # 估计器拟合训练数据
@@ -637,8 +644,8 @@ class Test:
         start = time.time()
         print('start create model')
 
-        clf = GBDT_Regressor(max_iter=250, max_depth=4)
-        clf.fit(X_train, y_train, learning_rate=0.01)
+        clf = GBDT_Regressor(max_iter=100, max_depth=3)
+        clf.fit(X_train, y_train, learning_rate=0.1)
 
         print(' model complete ')
         # 结束时间
@@ -1096,6 +1103,8 @@ class Test:
 if __name__ == '__main__':
     test = Test()
 
+    test.test_tiny_regress_dataset()
+
     # test.test_regress_dataset()
 
     # test.test_Mnist_dataset_2classification(60000,10000)
@@ -1104,7 +1113,7 @@ if __name__ == '__main__':
 
     # test.test_tiny_multiclassification_dataset()
 
-    test.test_Mnist_dataset(60000,10000)
+    # test.test_Mnist_dataset(60000,10000)
 
     # test.test_iris_dataset()
 

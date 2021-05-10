@@ -316,8 +316,8 @@ class RegresionTree():
             trainDataArr_DevFeature = trainDataArr[:, A_j]
 
             # s_i 将数据集 划分为两半 R1 和 R2
-            R1 = trainLabelArr[trainDataArr_DevFeature <= s_i]  # 特征值 取值为 <= s_i
-            R2 = trainLabelArr[trainDataArr_DevFeature > s_i]
+            R1 = trainLabelArr[trainDataArr_DevFeature < s_i]  # 特征值 取值为 <= s_i
+            R2 = trainLabelArr[trainDataArr_DevFeature >= s_i]
 
             c1 = np.mean(R1)
             c2 = np.mean(R2)
@@ -369,13 +369,13 @@ class RegresionTree():
                 T.childs[0] = self.__build_tree([],
                                                 [], feature_value_set-{(best_feature_value)}, tree_depth + 1,
                                                 prev_feature=T.feature,
-                                                prev_feature_split='<=' + str(Ag_split),
+                                                prev_feature_split='<' + str(Ag_split),
                                                 father_label=Ag_c1)  # 左边的均值 作为下一个节点的标签值
 
                 T.childs[1] = self.__build_tree([],
                                                 [], feature_value_set-{(best_feature_value)}, tree_depth + 1,
                                                 prev_feature=T.feature,
-                                                prev_feature_split='>' + str(Ag_split),
+                                                prev_feature_split='>=' + str(Ag_split),
                                                 father_label=Ag_c2)  # 右边的均值 作为下一个节点的标签值
             else:
 
@@ -385,29 +385,29 @@ class RegresionTree():
 
                 # 二叉树 只有左右两个节点
                 # 　小于等于　切分点
-                T.childs[0] = self.__build_tree(trainDataArr[trainDataArr_DevFeature <= Ag_split],
-                                                trainLabelArr[trainDataArr_DevFeature <= Ag_split],
+                T.childs[0] = self.__build_tree(trainDataArr[trainDataArr_DevFeature < Ag_split],
+                                                trainLabelArr[trainDataArr_DevFeature < Ag_split],
                                                 feature_value_set - {(best_feature_value)},
                                                 tree_depth + 1,
                                                 prev_feature=T.feature,
-                                                prev_feature_split='<=' + str(Ag_split), father_label=Ag_c1)
+                                                prev_feature_split='<' + str(Ag_split), father_label=Ag_c1)
 
                 # 大于 切分点
-                T.childs[1] = self.__build_tree(trainDataArr[trainDataArr_DevFeature > Ag_split],
-                                                trainLabelArr[trainDataArr_DevFeature > Ag_split],
+                T.childs[1] = self.__build_tree(trainDataArr[trainDataArr_DevFeature >= Ag_split],
+                                                trainLabelArr[trainDataArr_DevFeature >= Ag_split],
                                                 feature_value_set - {(best_feature_value)},
                                                 tree_depth + 1,
                                                 prev_feature=T.feature,
-                                                prev_feature_split='>' + str(Ag_split), father_label=Ag_c2)
+                                                prev_feature_split='>=' + str(Ag_split), father_label=Ag_c2)
 
-        # print('T.feature:{}'.format(T.feature))
-        # print('T.prev_feature:{},T.prev_feature_split:{} '.format(T.prev_feature, T.prev_feature_split))
-        #
-        # print('depth:{} '.format(tree_depth))
+        print('T.feature:{}'.format(T.feature))
+        print('T.prev_feature:{},T.prev_feature_split:{} '.format(T.prev_feature, T.prev_feature_split))
+
+        print('depth:{} '.format(tree_depth))
         # print('T.childs:{}'.format(T.childs))
-        # print('T.label:{}'.format(T.label))
-        #
-        # print('-----------')
+        print('T.label:{}'.format(T.label))
+
+        print('-----------')
 
         return T
 
@@ -624,6 +624,7 @@ class RegresionTree_GBDT():
 
         return loss
 
+    # TODO: 参考 sklearn , 实现非递归建立树
     def __build_tree(self, trainDataArr, trainLabelArr,origin_trainLabelArr, feature_value_set, tree_depth, prev_feature=None,
                      prev_feature_split=None, father_label=None):
         """
@@ -631,16 +632,14 @@ class RegresionTree_GBDT():
 
         递归结束条件：
 
-        (1) 当前结点包含的样本全属于同一类别，无需划分。
-
-        (2) 当前属性集为空，或所有样本在所有属性上的取值相同，无法划分：把当前结点标记为叶节点，并将其类别设定为该结点所含样本最多的类别。
+        (1) 当前属性集为空，或所有样本在所有属性上的取值相同，无法划分：把当前结点标记为叶节点，并将其类别设定为该结点所含样本最多的类别。
 
         属性集为空的情况：假设有六个特征，六个特征全部用完发现，数据集中还是存在不同类别数据的情况。
 
         当前特征值全都相同，在类别中有不同取值。
 
 
-        (3)当前结点包含的样本集合为空，不能划分：将类别设定为父节点所含样本最多的类别。
+        (2)当前结点包含的样本集合为空，不能划分：将类别设定为父节点所含样本最多的类别。
 
         出现这个情况的原因是：在生成决策树的过程中，数据按照特征不断的划分，很有可能在使用这个特征某一个值之前，已经可以判断包含该特征值的类别了。所以会出现空的情况。
 
@@ -742,6 +741,320 @@ class RegresionTree_GBDT():
         # print('Nums of feature_value_set: {}'.format(len(feature_value_set)))
 
         self.root = self.__build_tree(trainDataArr, trainLabelArr,origin_trainLabelArr, feature_value_set, tree_depth=0) # 根节点树的高度为0
+
+    def __predict(self, row):
+        """
+        预测 一个样本
+
+        :param row:
+        :return:
+        """
+
+        p = self.root
+
+        while p.label == None:  # 到达 叶子节点 退出循环
+
+            judge_feature = p.feature  # 当前节点划分的 特征
+            # judge_feature_name= p.feature_name
+
+            if row[judge_feature] <= p.feature_split:
+                p = p.childs[0]
+            else:
+                p = p.childs[1]
+
+        return p.label
+
+    def predict(self, testDataArr):
+        """
+        推理 测试 数据集，返回预测结果
+
+        :param test_data:
+        :return:
+        """
+
+        res_list = []
+
+        for row in testDataArr:
+            res_list.append(self.__predict(row))
+
+        return np.array(res_list)
+
+    def score(self, testDataArr, testLabelArr):
+        """
+        推理 测试 数据集，返回预测 的 平方误差
+
+        :param test_data:
+        :return:
+        """
+        res_list = self.predict(testDataArr)
+
+        square_loss = np.average(np.square(res_list - testLabelArr))  # 平方误差
+
+        return square_loss
+
+
+class RegresionTree_XGBoost():
+    """
+
+    CART 回归树
+
+    1.适用于 XGBoost
+
+
+    Author: xrh
+    Date: 2021-05-08
+
+    """
+
+    def __init__(self, root=None, gama=0, reg_lambda=1,max_depth=2, min_sample_split=2 ,print_log=True):
+        """
+
+        :param root: 树的根节点
+        :param gama: 在树的叶节点上进行进一步 划分节点 所需的最小 增益(Gain); 若小于此阈值, 不往下分裂, 形成叶子节点 ; 越大gamma，算法将越保守。
+        :param max_depth: 树的最大深度
+        :param min_sample_split: 划分节点时需要保留的样本数。当某节点的样本数小于某个值时，就当做叶子节点，不允许再分裂。默认是2
+        :param print_log: 是否打印日志
+        """
+
+        self.root = root
+
+        self.gama = gama  # 损失的 阈值
+
+        self.reg_lambda=reg_lambda
+
+        self.max_depth = max_depth  # 树的最大深度
+
+        self.min_sample_split=min_sample_split #
+
+        self.print_log=print_log #是否打印日志
+
+
+    @staticmethod
+    def get_feature_value_set(trainDataArr):
+        """
+        cartTree 为二叉树,
+
+        对于离散型特征：
+
+            若为 可比型 (数值类型特征)，比如电影评分等级，特征的所有取值为 [1, 2, 3, 4, 5]，那么按照阈值 0.5, 1.5, 2.5, 3.5, 4.5, 5.5 分别划分即可，这里选择了 6 个划分点；
+
+            *若为 不可比型，即Categorical类型，比如职业，对应的可能取值为 [0, 1, 2]，那么划分取值为 0, 1, 2，表示是否等于0，是否等于1，是否等于2，注意sklearn里面处理这类数据并没有对应的实现方法，而是采用的是离散型特征可比型处理策略。即：CART可以做类别型数据，但是sklearn没实现。
+
+        对于连续型特征：
+            那么取值就很多了，比如 [0.13, 0.123, 0.18, 0.23, ...]，那么要每两个值之间都取一个阈值划分点。
+
+        综上, 排除 * 的情况, 我们可以简单 使用 特征值作为 切分 阈值
+
+         eg. 特征'电影评分' 包含特征值: [1, 2, 3]
+
+        切分点为:
+        1.  电影评分 <=1 | 电影评分 >1
+        2.  电影评分 <=2 | 电影评分 >2
+        3.  电影评分 <=3 | 电影评分 >3
+
+        返回所有 (特征, 特征切分点) 的组合
+
+        :param trainDataArr:
+        :return:
+        """
+
+        feature_value_set = set()  # 可供选择的特征集合 , 包括 (特征, 切分值)
+
+        for i in range(np.shape(trainDataArr)[1]):  # 遍历所有的特征
+
+            trainDataArr_DevFeature = trainDataArr[:, i]  # 特征 i 单独抽出来
+
+            A_set = {A_i for A_i in trainDataArr_DevFeature}  # trainDataArr_DevFeature 中的 所有取值
+
+            for A_i in A_set:
+                feature_value_set.add( (i, A_i) )  #
+
+        return feature_value_set
+
+
+    def select_max_gain_feature(self,trainDataArr, gArr, hArr, feature_value_set):
+        """
+
+        选择 最优的 切分点
+
+        :param trainDataArr: 样本集合 X
+        :param gArr: 每一个样本的 损失函数 对 F 的一阶梯度
+        :param hArr: 每一个样本的  损失函数 对 F 的 二阶梯度
+        :param feature_value_set:
+        :return:
+        """
+
+        Ag = None  # 最佳特征
+        Ag_split = None  # 最佳特征的　切分点
+
+        max_Gain = float('-inf')
+
+        loss_old = (np.sum(gArr)**2) /  ( np.sum(hArr) + self.reg_lambda )  # 切分前的损失
+
+        for A_j,s_i  in feature_value_set:  # 遍历 (特征, 切分值)
+
+            trainDataArr_DevFeature = trainDataArr[:, A_j]
+
+            # s_i 将数据集 划分为两半 R1 和 R2
+            R1_g = gArr[trainDataArr_DevFeature <= s_i]  # 特征值 取值为 <= s_i
+            R1_h = hArr[trainDataArr_DevFeature <= s_i]
+
+            R2_g = gArr[trainDataArr_DevFeature > s_i]
+            R2_h = hArr[trainDataArr_DevFeature > s_i]
+
+            loss_new = ( (np.sum(R1_g)**2) / (np.sum(R1_h) + self.reg_lambda) ) +  ( (np.sum(R2_g)**2) / ( np.sum(R2_h) + self.reg_lambda ) )
+
+            gain = loss_new - loss_old
+
+            if gain >= max_Gain:
+
+                max_Gain = gain
+                Ag = A_j
+                Ag_split = s_i
+
+
+        return Ag, Ag_split, max_Gain
+
+
+
+    def update_leaf_region_lable(self, gArr,hArr):
+        """
+        更新 叶子节点的 预测值
+
+        (1) 需要考虑 会触发 X/0= Nan 的bug
+
+        :param gArr: 损失函数 对 F 的一阶梯度
+        :param hArr: 损失函数 对 F 的 二阶梯度
+        :return:
+        """
+
+        numerator = np.sum( gArr )
+        if numerator == 0:
+            return 0.0
+
+        denominator = np.sum( hArr ) + self.reg_lambda
+
+        if abs(denominator) < 1e-150:
+            return 0.0
+        else:
+            return - numerator / denominator
+
+
+
+    def __build_tree(self, trainDataArr, gArr,hArr, feature_value_set, tree_depth, prev_feature=None, prev_max_gain=None ,
+                     prev_feature_split=None, father_label=None):
+        """
+        递归 构建树
+
+        递归结束条件：
+
+        (1) 当前属性集为空
+
+        (2)当前结点包含的样本集合为空，不能划分：将类别设定为父节点的类别。
+
+
+
+        :param trainDataArr:
+        :param gArr: 每一个样本的 损失函数 对 F 的一阶梯度
+        :param hArr: 每一个样本的  损失函数 对 F 的 二阶梯度
+        :param feature_value_set:
+        :param tree_depth:
+        :param prev_feature:
+        :param prev_feature_split:
+        :param father_label:
+        :return:
+        """
+
+        T = Node()
+
+        T.prev_feature = prev_feature
+        T.prev_feature_split = prev_feature_split
+
+        if np.shape(trainDataArr)[0] == 0 :  # 划分后 数据集已经为空
+
+            T.label = father_label  # 说明不能再往下划分了, 使用 上一个 节点给它的标签值
+
+        else:
+
+            T.loss = prev_max_gain
+
+            T.sample_N = np.shape(trainDataArr)[0]
+
+            leaf_label = self.update_leaf_region_lable( gArr,hArr ) # 对于叶子节点区域 ，计算出最佳拟合值
+
+            if len(feature_value_set) == 0 \
+                    or np.shape(trainDataArr)[0] <= self.min_sample_split \
+                    or tree_depth >= self.max_depth \
+                    or prev_max_gain <= self.gama: # TODO: 回归时 , max_gain 将小于 0 , 若 self.gama=0 则不再继续分裂,导致树的高度过低, 模型欠拟合
+
+            # len(feature_value_set) == 0 : 所有 切分(特征, 特征值) 的组合 已经用完,
+            #  np.shape(trainDataArr)[0] <= self.min_sample_split 划分节点时需要保留的样本数。当某节点的样本数小于某个值时，就当做叶子节点，不允许再分裂
+            #   tree_depth >= self.max_depth 树的深度达到最大深度 ,
+            #  prev_max_gain <= self.gama 考虑 切分的最大的增益是否比 γ(gama) 大，如果小于γ则不进行分裂（预剪枝）
+
+                T.label = leaf_label #  叶子节点的标签
+
+            else:
+
+                Ag, Ag_split, max_gain = self.select_max_gain_feature(trainDataArr, gArr,hArr,feature_value_set)
+
+                best_feature_value = (Ag, Ag_split)
+
+                # print('Ag:{} , Ag_split:{}, max_gain:{}'.format(Ag,Ag_split,max_gain))
+
+                T.feature = Ag
+                T.feature_split = Ag_split
+
+                T.childs = dict()
+
+                trainDataArr_DevFeature = trainDataArr[:, Ag]
+
+                # CART 树为二叉树
+                # 左节点为  <=  特征值的 分支
+                T.childs[0] = self.__build_tree(trainDataArr[trainDataArr_DevFeature <= Ag_split],
+                                                gArr[trainDataArr_DevFeature <= Ag_split],
+                                                hArr[trainDataArr_DevFeature <= Ag_split],
+                                                feature_value_set - {(best_feature_value)},
+                                                tree_depth + 1,
+                                                prev_feature=T.feature, prev_max_gain=max_gain,
+                                                prev_feature_split='<=' + str(Ag_split), father_label=leaf_label)
+
+                # 右节点为 > 切分特征值的 分支
+                T.childs[1] = self.__build_tree(trainDataArr[trainDataArr_DevFeature > Ag_split],
+                                                gArr[trainDataArr_DevFeature > Ag_split],
+                                                hArr[trainDataArr_DevFeature > Ag_split],
+                                                feature_value_set - {(best_feature_value)},
+                                                tree_depth + 1,
+                                                prev_feature=T.feature, prev_max_gain=max_gain,
+                                                prev_feature_split='>' + str(Ag_split), father_label=leaf_label)
+
+        if self.print_log: #
+
+            print('T.feature:{},T.feature_split:{}, T.loss:{} , T.sample_N:{}  '.format(T.feature,T.feature_split, T.loss,T.sample_N))
+            print('T.prev_feature:{},T.prev_feature_split:{} '.format(T.prev_feature, T.prev_feature_split))
+            print('depth:{} '.format(tree_depth))
+            # print('T.childs:{}'.format(T.childs))
+            print('T.label:{}'.format(T.label))
+            print('-----------')
+
+        return T
+
+    def fit(self, trainDataArr, gArr, hArr, feature_value_set=None):
+        """
+
+        :param trainDataArr:  特征 X
+        :param gArr: 每一个样本的 损失函数 对 F 的一阶梯度
+        :param hArr: 每一个样本的  损失函数 对 F 的 二阶梯度
+        :param feature_value_set:
+        :return:
+        """
+
+        if feature_value_set is None:
+            feature_value_set = self.get_feature_value_set(trainDataArr)  # 可供选择的特征集合 , 包括 (特征, 切分值)
+
+        # print('Nums of feature_value_set: {}'.format(len(feature_value_set)))
+
+        self.root = self.__build_tree(trainDataArr, gArr, hArr, feature_value_set,prev_max_gain=float('inf') , tree_depth=0) # 根节点树的高度为0
 
     def __predict(self, row):
         """

@@ -1,6 +1,7 @@
 import numpy as np
 
 import time
+from deprecated import deprecated
 
 from sklearn.ensemble import GradientBoostingClassifier
 
@@ -35,32 +36,60 @@ class XGBoost_v1:
     """
 
     实现 基础的 XGBoost , 功能包括:
-    1. 回归
-    2.
+
+    1. 回归 ( 使用平方损失函数)
+    2. 二分类 ( 使用 交叉熵损失函数)
+    3. 多分类 ( 使用 对数损失函数 )
+
+    ref: https://microstrong.blog.csdn.net/article/details/103655906
+
+    实现细节：
+    (1) 使用  完全贪心算法 划分子节点 , 未实现 近似算法
+    (2) 未实现 稀疏性感知（Sparsity Awareness）
+    (3) 加权分位数略图（Weighted Quantile Sketch）
+    (4) 未实现 分块并行
 
     Author: xrh
-    Date: 2021-04-18
+    Date: 2021-05-07
 
-    ref: https://zhuanlan.zhihu.com/p/91652813
 
     test1: 多分类任务
 
     数据集：Mnist
     参数: error_rate_threshold=0.01, max_iter=20, max_depth=3 , learning_rate=0.5
-    训练集数量：60000
-    测试集数量：10000
-    正确率： 0.915
-    模型训练时长：1542s
+    训练集数量：
+    测试集数量：
+    正确率：
+    模型训练时长：
 
     """
 
-    def __init__(self, error_rate_threshold=0.05, max_iter=10, max_depth=1):
+    def __init__(self, error_rate_threshold=0.05 ,
+                        max_iter=10,
+                        max_depth=1,
+                        objective='binary:logistic',
+                        num_class=None ,
+                        base_score=0.0,
+                        gama=0.0,
+                        reg_lambda=1.0 ):
         """
 
         :param error_rate_threshold: 训练中止条件, 若当前得到的基分类器的组合 的错误率 小于阈值, 则停止训练
         :param max_iter: 最大迭代次数
         :param max_depth: CART 回归树 的最大深度
+
+        :param objective:  目标函数选择
+                            (1) reg:squarederror：损失平方回归
+                            (2) binary:logistic：二元分类的逻辑回归，输出概率
+                            (3) multi:softmax：使用softmax目标函数 进行多类分类，还需要设置 num_class（类数）
+        :param num_class: 多分类时的 分类数目
+        :param base_score: 所有实例的 初始预测得分 F_0
+        :param gama:  损失函数中 树的总叶子个数 T 的系数, 可以控制模型的复杂度
+        :param reg_lambda: 目标函数中使用 L2 正则化时控制 正则化的强度
+
+
         """
+        self.N=0 # 训练集的样本个数
 
         # 训练中止条件 error_rate  < self.error_rate_threshold ( 若当前得到的基分类器的组合 的错误率 小于阈值, 则停止训练)
         self.error_rate_threshold = error_rate_threshold
@@ -68,8 +97,23 @@ class XGBoost_v1:
         # 最大迭代次数
         self.max_iter = max_iter
 
-        # CART 回归树 的最大深
+        # CART 回归树 的最大深度
         self.max_depth = max_depth
+
+        # 目标函数选择
+        self.objective=objective
+
+        #  多分类时的 分类数目
+        self.num_class=num_class
+
+        # 所有实例的 初始预测得分 F_0
+        self.base_score= base_score
+
+        # 损失函数中 树的总叶子个数 T 的系数, 可以控制模型的复杂度
+        self.gama = gama
+
+        # 目标函数中使用 L2 正则化时控制 正则化的强度
+        self.reg_lambda= reg_lambda
 
         self.G = []  # 弱分类器 集合
 
@@ -81,33 +125,6 @@ class XGBoost_v1:
         """
         return 1 / (1 + np.exp(-X))
 
-    # def softmax_deprecated(self,X):
-    #     """
-    #     softmax处理，将结果转化为概率
-    #
-    #     :param X:
-    #     :return:
-    #     """
-    #     #TODO: 导致 上溢出 和 下溢出 问题
-    #
-    #     return  np.exp(X) / np.sum( np.exp(X) , axis=0 )  # softmax处理，将结果转化为概率
-
-    def softmax_deprecated(self,X):
-        """
-        softmax处理，将结果转化为概率
-
-        解决了 softmax的 上溢出 和 下溢出的问题
-
-        ref: https://www.cnblogs.com/guoyaohua/p/8900683.html
-
-        :param X: shape (K,N)
-        :return: shape (N,)
-        """
-
-        X_max= np.max( X, axis=0)
-        X= X-X_max
-
-        return  np.exp(X) / np.sum( np.exp(X) , axis=0 )  # softmax处理，将结果转化为概率
 
     def softmax(self,X):
         """
@@ -115,7 +132,7 @@ class XGBoost_v1:
 
         解决了 softmax的 溢出问题
 
-        np.nan_to_num : 使用0代替数组x中的nan元素，使用有限的数字代替inf元素
+        np.nan_to_num : 使用 0代替数组x中的nan元素，使用有限的数字代替 inf元素
 
         ref: sklearn 源码
             MultinomialDeviance -> def negative_gradient
@@ -126,7 +143,94 @@ class XGBoost_v1:
 
         return  np.nan_to_num( np.exp(X - logsumexp(X, axis=0)) )  # softmax处理，将结果转化为概率
 
-    def fit(self, X, y, learning_rate):
+    def init_y_predict(self,F_0):
+        """
+        m=0 :
+        初始化 y_predict
+        :param F_0:
+        :return:
+        """
+        y_predict=None
+
+        if self.objective ==  "reg:squarederror": # 回归
+            y_predict = np.array( [ F_0 ] * self.N )
+
+        elif self.objective == "binary:logistic": # 二分类
+            y_predict = np.array( [ self.sigmoid(F_0) ] * self.N)
+
+        return y_predict
+
+    def cal_g_h(self,y , y_predict):
+        """
+        计算损失函数 一阶梯度 和 二阶梯度
+
+        g : 损失函数 对 F 的一阶梯度 , 相当于 GBDT 中的残差 r
+        h: 损失函数 对 F 的 二阶梯度
+
+        :param y:
+        :param y_predict:
+        :return:
+        """
+        g,h=0,0
+
+        if self.objective ==  "reg:squarederror": # 回归
+
+            g = y_predict - y
+
+            h=  np.ones_like(g)
+
+        elif self.objective == "binary:logistic": # 二分类
+            g = y_predict - y
+            h = y_predict*(1-y_predict)
+
+        return g,h
+
+    def update_y_predict(self,F):
+        """
+
+        更新 本轮迭代的 y_predict
+
+        :param F:
+        :return:
+        """
+        y_predict=None
+
+        if self.objective ==  "reg:squarederror": # 回归
+            y_predict = F
+
+        elif self.objective == "binary:logistic": # 二分类
+            y_predict = self.sigmoid(F)
+
+        return y_predict
+
+    def cal_train_error(self,y,y_predict):
+        """
+
+        计算 当前 所有弱分类器加权 得到的 最终分类器 的 分类错误率
+
+        :param F:
+        :return:
+        """
+        N = len(y)
+
+        err_rate=None
+
+        if self.objective == "reg:squarederror":  # 回归
+
+            err_rate = np.average(np.square(y_predict - y)) # 平均 平方误差损失 ( mean_squared_error )
+
+        elif self.objective == "binary:logistic":  # 二分类
+
+            y_predict[y_predict >= 0.5] = 1  # 概率 大于 0.5 被标记为 正例
+            y_predict[y_predict < 0.5] = 0  # 概率 小于 0.5 被标记为 负例
+
+            err_arr = np.ones(N, dtype=int)
+            err_arr[y_predict == y] = 0
+            err_rate = np.mean(err_arr)
+
+        return err_rate
+
+    def fit(self, X, y ,learning_rate,train_error=True):
         """
 
         用 训练数据 拟合模型
@@ -134,127 +238,84 @@ class XGBoost_v1:
         :param X: 特征数据 , shape=(N_sample, N_feature)
         :param y: 标签数据 , shape=(N_sample,)
         :param learning_rate: 学习率
+        :param train_error:  在训练模型时, 计算模型在 训练集上的误差率
         :return:
         """
 
-        N = np.shape(X)[0]  # 样本的个数
+        self.N = np.shape(X)[0]  # 样本的个数
 
-        self.K = len({ele for ele in y})  # y 中有多少种不同的标签,  K分类
+        if self.objective == "binary:logistic" or 'reg:squarederror': # 二分类 or 回归
 
-        print('according to the training dataset : K={} classification task'.format(self.K))
+            F_0 = self.base_score
+            # F_0 = np.mean(y) # TODO:
 
-        F_0 = np.zeros( (self.K ),dtype=float)  # shape : (K,)
+            self.G.append(F_0)
 
-        for k in range(self.K): # 遍历 所有的 类别
+            F = np.array( [self.base_score] * self.N ) # shape: (N, )
 
-            F_0[k] = len(y[y == k]) / len(y)
+            y_predict= self.init_y_predict(F_0)
 
-        self.G.append(F_0)
+            feature_value_set = RegresionTree_XGBoost.get_feature_value_set(X)  # 可供选择的特征集合 , 包括 (特征, 切分值)
 
-        F = np.transpose([F_0] * N) # 对 F_0 进行复制,  shape : (K, N)
+            for m in range(self.max_iter):  # 进行 第 m 轮迭代
 
-        feature_value_set = RegresionTree.get_feature_value_set(X)  # 可供选择的特征集合 , 包括 (特征, 切分值)
+                g,h = self.cal_g_h( y,y_predict )
 
-        y_one_hot = (y == np.array(range(self.K)).reshape(-1, 1)).astype(
-            np.int8)  # 将 预测向量 扩展为 one-hot , shape: (K,N)
+                RT = RegresionTree_XGBoost(gama=self.gama,reg_lambda=self.reg_lambda, max_depth=self.max_depth, print_log=True)
 
-        for m in range(1,self.max_iter):  # 进行 第 m 轮迭代
+                RT.fit( X, g, h, feature_value_set=feature_value_set )
 
-            p = self.softmax( F ) #  shape: (K,N)
+                f_m = RT.predict(X) # 第 m 颗树
 
-            DT_list=[]
+                self.G.append( (learning_rate, RT) )  # 存储 基分类器
 
-            for k in range(self.K): #  依次训练 K 个 二分类器
+                F = F + learning_rate * f_m
 
-                print( '======= train No.{} 2Classifier ======='.format(k) )
+                y_predict = self.update_y_predict(F)
 
-                r = y_one_hot[k] - p[k]   # 残差 shape:(N,)
+                if train_error:
 
-                # 训练 用于 2分类的 回归树
-                DT = RegresionTree_GBDT(min_square_loss=0.1, max_depth=self.max_depth,print_log=True)
+                    y_predict_copy = y_predict.copy() # y_predict 下一轮迭代 还要使用, 不能被修改
 
-                DT.fit(X, r, y_one_hot[k], feature_value_set=feature_value_set)
+                    err_rate= self.cal_train_error(y,y_predict_copy)
 
-                y_predict = (self.K / (self.K-1)) * ( DT.predict(X) ) #  shape:(N,)
+                    print( 'round:{}, err_rate:{}'.format( m, err_rate ) )
+                    print( '======================' )
 
-                DT_list.append(DT)
+                    if err_rate < self.error_rate_threshold:  # 错误率 已经小于 阈值, 则停止训练
+                        break
 
-                F[k] += learning_rate * y_predict  # F[k]  shape:(N,)
-
-                # print('======= end =======')
-
-
-            self.G.append( (learning_rate, DT_list) )  # 存储 基分类器
-
-            # 计算 当前 所有弱分类器加权 得到的 最终分类器 的 分类错误率
-
-            G = self.softmax( F )
-
-            G_label = np.argmax( G, axis=0 )  # 取 概率最大的 作为 预测的标签
-
-            err_arr = np.ones( N, dtype=int )
-            err_arr[G_label == y] = 0
-            err_rate = np.mean(err_arr)  # 计算训练误差
-
-            print('round:{}, err_rate:{}'.format(m, err_rate))
-            print('======================')
-
-            if err_rate < self.error_rate_threshold:  # 错误率 已经小于 阈值, 则停止训练
-                break
 
     def predict(self, X):
         """
-        对 测试 数据进行预测, 返回预测的标签
-
-        :param X: 特征数据 , shape=(N_sample, N_feature)
-        :return:
-        """
-        N = np.shape(X)[0]  # 样本的个数
-
-        F_0 = self.G[0]  # G中 第一个 存储的是 初始化情况
-
-        F = np.transpose([F_0] * N)  # shape : (K, N)
-
-        for alpha, DT_list in self.G[1:]:
-
-            for k in range(self.K):
-
-                DT = DT_list[k]
-
-                y_predict = (self.K / (self.K - 1)) * (DT.predict(X))  # shape:(N,)
-
-                F[k] += alpha * y_predict  # F[k]  shape:(N,)
-
-        G = self.softmax(F)
-
-        G_label = np.argmax(G, axis=0)
-
-        return G_label
-
-    def predict_proba(self, X):
-        """
-        对 测试 数据进行预测, 返回预测的 概率值
+        对 测试 数据进行预测, 返回预测值
 
         :param X: 特征数据 , shape=(N_sample, N_feature)
         :return:
         """
 
-        F = self.G[0]  # 第一个 存储的是 初始化情况
+        f = 0  # 最终分类器
 
-        for alpha, DT_list in self.G[1:]:
+        f += self.G[0]  # 第一个 存储的是 初始化情况
 
-            for k in range(self.K):
-                DT = DT_list[k]
+        y_predict=None # 输出的标签
 
-                y_predict = (self.K / (self.K - 1)) * (DT.predict(X))  # shape:(N,)
+        for alpha, RT in self.G[1:]:
+            f_m = RT.predict(X)
+            f += alpha * f_m
 
-                DT_list.append(DT)
+        if self.objective == "reg:squarederror":  # 回归
 
-                F[k] += alpha * y_predict  # F[k]  shape:(N,)
+            y_predict=f
 
-        G = self.softmax(F)
+        elif self.objective == "binary:logistic":
 
-        return G
+            y_predict = self.sigmoid(f)
+
+            y_predict[y_predict >= 0.5] = 1  # 概率 大于 0.5 被标记为 正例
+            y_predict[y_predict < 0.5] = 0  # 概率 小于 0.5 被标记为 负例
+
+        return y_predict
 
 
     def score(self, X, y):
@@ -263,20 +324,15 @@ class XGBoost_v1:
 
         :param X: 特征数据 , shape=(N_sample, N_feature)
         :param y: 标签数据 , shape=(N_sample,)
-        :return:  正确率 accuracy
+        :return:  错误率 error
+
         """
 
-        N = np.shape(X)[0]  # 样本的个数
+        y_predict = self.predict(X)
 
-        G = self.predict(X)
+        err_rate=self.cal_train_error(y,y_predict)
 
-        err_arr = np.ones(N, dtype=int)
-        err_arr[G == y] = 0
-        err_rate = np.mean(err_arr)
-
-        accuracy = 1 - err_rate
-
-        return accuracy
+        return err_rate
 
 
 class Test:
@@ -285,7 +341,7 @@ class Test:
         """
 
         利用 https://blog.csdn.net/zpalyq110/article/details/79527653 中的数据集
-        测试  GBDT  回归
+        测试  回归 问题
 
         :return:
         """
@@ -309,8 +365,8 @@ class Test:
         # 创建决策树
         print('start create model')
 
-        clf = GBDT_Regressor(max_iter=10, max_depth=3)
-        clf.fit(X, y, learning_rate=0.1)
+        clf = XGBoost_v1( error_rate_threshold=0.01,objective='reg:squarederror', max_iter=5, max_depth=3,gama=0.0,reg_lambda=0.0 )
+        clf.fit( X, y,learning_rate=0.1 )
 
         print(' model complete ')
         # 结束时间
@@ -321,7 +377,7 @@ class Test:
         X_test = np.array([
             [25, 65]
         ])
-        y_predict = clf.predict(X_test)
+        y_predict = clf.predict( X_test )
 
         print('res: ', y_predict)
 
@@ -342,27 +398,16 @@ class Test:
         y = dataset.target
 
         # 将数据集以9:1的比例随机分为训练集和测试集，为了重现随机分配设置随机种子，即random_state参数
-        X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.9, test_size=0.1, random_state=188)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=188)
 
-        # 实例化估计器对象
-        params = {'n_estimators': 500, 'max_depth': 4, 'min_samples_split': 2,
-                  'learning_rate': 0.01, 'loss': 'ls'}
-        gbr = ensemble.GradientBoostingRegressor(**params)
-
-        # 估计器拟合训练数据
-        gbr.fit(X_train, y_train)
-
-        # 训练完的估计器对测试数据进行预测
-        y_pred = gbr.predict(X_test)
 
         # 输出特征重要性列表
-        # print(gbr.feature_importances_)
 
         start = time.time()
         print('start create model')
 
-        clf = GBDT_Regressor(max_iter=250, max_depth=4)
-        clf.fit(X_train, y_train, learning_rate=0.01)
+        clf = XGBoost_v1( error_rate_threshold=0.01,objective='reg:squarederror', max_iter=100, max_depth=3,gama=0.0,reg_lambda=0.0 )
+        clf.fit( X_train, y_train,learning_rate=0.1 )
 
         print(' model complete ')
         # 结束时间
@@ -371,35 +416,43 @@ class Test:
 
         y_pred_test = clf.predict(X_test)
 
-        print('by sklearn , the squared_error:', mean_squared_error(y_test, y_pred))  # 8
-
         print('by xrh , the squared_error:', mean_squared_error(y_test, y_pred_test))  #
 
     def test_tiny_2classification_dataset(self):
         """
 
-        利用 https://blog.csdn.net/zpalyq110/article/details/79527653 中的数据集
-        测试  GBDT  回归
+        利用 https://blog.csdn.net/anshuai_aw1/article/details/82970489 中的数据集
+        测试  xgboost
 
         :return:
         """
 
         dataset = np.array(
-            [[5, 20, 0],
-             [7, 30, 0],
-             [21, 70, 1],
-             [30, 60, 1],
+            [[1, -5, 0],
+             [2, 5, 0],
+             [3, -2, 1],
+             [1, 2, 1],
+             [2, 0, 1],
+             [6, -5, 1],
+             [7, 5, 1],
+             [6, -2, 0],
+             [7, 2, 0],
+             [6, 0, 1],
+             [8, -5, 1],
+             [9, 5, 1],
+             [10, -2, 0],
+             [8, 2, 0],
+             [9, 0, 1]
              ])
-        columns = ['age', 'weight', 'label']
 
         X = dataset[:, 0:2]
         y = dataset[:, 2]
 
-        clf = GBDT_2Classifier(error_rate_threshold=0.0, max_iter=5, max_depth=3)
+        clf = XGBoost_v1(error_rate_threshold=0.0, max_iter=2, max_depth=3,objective="binary:logistic")
         clf.fit(X, y, learning_rate=0.1)
 
         X_test = np.array(
-            [[25, 65]])
+            [[9, 0]])
 
         print('y predict:', clf.predict(X_test))
 
@@ -482,42 +535,9 @@ class Test:
         print('start training model....')
         start = time.time()
 
-        '''
-        sklearn GradientBoostingClassifier 调参：
 
-        loss：损失函数。有deviance和exponential两种。deviance是采用对数似然，exponential是指数损失，后者相当于AdaBoost。
-        n_estimators:最大弱学习器个数，默认是100，调参时要注意过拟合或欠拟合，一般和learning_rate一起考虑。
-        learning_rate:步长，即每个弱学习器的权重缩减系数，默认为0.1，取值范围0-1，当取值为1时，相当于权重不缩减。较小的learning_rate相当于更多的迭代次数。
-        subsample:子采样，默认为1，取值范围(0,1]，当取值为1时，相当于没有采样。小于1时，即进行采样，按比例采样得到的样本去构建弱学习器。这样做可以防止过拟合，但是值不能太低，会造成高方差。
-        init：初始化弱学习器。不使用的话就是第一轮迭代构建的弱学习器.如果没有先验的话就可以不用管
-
-        由于GBDT使用CART回归决策树。以下参数用于调优弱学习器，主要都是为了防止过拟合
-        max_feature：树分裂时考虑的最大特征数，默认为None，也就是考虑所有特征。可以取值有：log2,auto,sqrt
-        max_depth：CART最大深度，默认为None
-        min_sample_split：划分节点时需要保留的样本数。当某节点的样本数小于某个值时，就当做叶子节点，不允许再分裂。默认是2
-        min_sample_leaf：叶子节点最少样本数。如果某个叶子节点数量少于某个值，会同它的兄弟节点一起被剪枝。默认是1
-        min_weight_fraction_leaf：叶子节点最小的样本权重和。如果小于某个值，会同它的兄弟节点一起被剪枝。一般用于权重变化的样本。默认是0
-        min_leaf_nodes：最大叶子节点数
-        '''
-
-        """
-        sklearn 性能指标
-        参数 learning_rate=0.1, n_estimators=50 , max_depth=3
-        
-        train data, row num:6000 , column num:784 
-        training cost time : 9.30972957611084
-        test data, row num:1000 , column num:784 
-        test dataset accuracy: 0.976 
-        
-        """
-
-        # clf = GradientBoostingClassifier(loss='deviance', learning_rate=0.1, n_estimators=50
-        #                                   , max_depth=3
-        #                                 )
-        # clf.fit(trainDataArr, trainLabelArr)
-
-        clf = GBDT_2Classifier( error_rate_threshold=0.01, max_iter=30, max_depth=3 )
-        clf.fit(trainDataArr, trainLabelArr,learning_rate=0.2)
+        clf = XGBoost_v1( error_rate_threshold=0.01,objective='binary:logistic' ,max_iter=30, max_depth=3 )
+        clf.fit(trainDataArr, trainLabelArr,learning_rate=0.5)
 
 
         # 结束时间
@@ -532,119 +552,120 @@ class Test:
         testDataArr = np.array(testDataList)
         testLabelArr = np.array(testLabelList)
 
-        # print('test dataset accuracy: {} '.format(clf.score(testDataArr, testLabelArr)))
+        accuracy=1-clf.score(testDataArr, testLabelArr)
+        print('test dataset accuracy: {} '.format( accuracy ))
 
         # 模型评估
 
-        y_pred = clf.predict(testDataArr)
-        y_true = testLabelArr
-
-        # 1.正确率
-        print('test dataset accuracy: {} '.format(accuracy_score(y_true, y_pred)))
-
-        print('====================')
-
-        # 2.精确率
-
-        # print(precision_score(y_true, y_pred, average='macro'))  #
-        # print(precision_score(y_true, y_pred, average='micro'))  #
-        # print(precision_score(y_true, y_pred, average='weighted'))  #
-
-        print('pos-1 precision: ', precision_score(y_true, y_pred, average='binary'))
-
-        precision_list = precision_score(y_true, y_pred, average=None)
-
-        print('neg-0 precision:{}, pos-1 precision:{}  '.format(precision_list[0], precision_list[1]))
-
-        print('====================')
-
-        # 3. 召回率
-
-        # print(recall_score(y_true, y_pred, average='macro'))  #
-        # print(recall_score(y_true, y_pred, average='micro'))  #
-        # print(recall_score(y_true, y_pred, average='weighted'))  #
-
-        print('pos-1 recall: ', recall_score(y_true, y_pred, average='binary'))
-
-        recall_list = recall_score(y_true, y_pred, average=None)
-
-        print('neg-0 recall:{}, pos-1 recall:{}  '.format(recall_list[0], recall_list[1]))
-
-        print('====================')
-
-        # 4. F1-score
-
-        # print(f1_score(y_true, y_pred, average='macro'))
-        # print(f1_score(y_true, y_pred, average='micro'))
-        # print(f1_score(y_true, y_pred, average='weighted'))
-
-        print('pos-1 f1_score: ', f1_score(y_true, y_pred, average='binary'))
-
-        f1_score_list = f1_score(y_true, y_pred, average=None)
-
-        print('neg-0 f1_score:{}, pos-1 f1_score:{}  '.format(f1_score_list[0], f1_score_list[1]))
-
-        print('====================')
-
-        # 画出 P-R 曲线
-
-        # sklearn 的 GBDT 作为基线
-        clf2 = GradientBoostingClassifier(loss='deviance', learning_rate=0.1, n_estimators=30
-                                          , max_depth=3
-                                          )
-
-        clf2.fit(trainDataArr, trainLabelArr)
-        y_pred = clf.predict(testDataArr)
-
-        y_scores = clf.predict_proba(testDataArr)
-
-        y_true = testLabelArr
-
-        precision, recall, thresholds = precision_recall_curve(y_true, y_scores)
-
-        y_scores2 = clf2.predict_proba(testDataArr)[:, 1]  # 第 1 列 , 表示为 正例的概率
-
-        precision2, recall2, thresholds2 = precision_recall_curve(y_true, y_scores2)
-
-        # disp = PrecisionRecallDisplay(precision=precision, recall=recall)
-        # disp.plot()
-
-        plt.plot(recall, precision, label="GDBT_2Classifier(xrh)", color='navy')  #
-
-        plt.plot(recall2, precision2, label="GradientBoostingClassifier(sklearn)", color='turquoise')
-
-        plt.title(' Precision-Recall curve ')
-
-        # plt.ylim([0.0, 1.05]) # Y 轴的取值范围
-        # plt.xlim([0.0, 1.0]) # X 轴的取值范围
-
-        plt.xlabel("recall")
-        plt.ylabel("precision")
-
-        plt.legend(loc=(0, -.38), prop=dict(size=14))  # 图例
-
-        plt.show()
-
-        # ROC 曲线
-        fpr, tpr, _ = roc_curve(y_true, y_scores)
-
-        fpr2, tpr2, _ = roc_curve(y_true, y_scores2)
-
-        plt.plot([0, 1], [0, 1], color='navy', linestyle='--')
-
-        plt.plot(fpr, tpr, label="GDBT_2Classifier(xrh)", color='darkorange')  #
-
-        plt.plot(fpr2, tpr2, label="GradientBoostingClassifier(sklearn)", color='turquoise')
-
-        # plt.xlim( [0.0, 1.0] )
-        # plt.ylim( [0.0, 1.05] )
-
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-
-        plt.legend(loc=(0, -.38), prop=dict(size=14))  # 图例
-
-        plt.show()
+        # y_pred = clf.predict(testDataArr)
+        # y_true = testLabelArr
+        #
+        # # 1.正确率
+        # print('test dataset accuracy: {} '.format(accuracy_score(y_true, y_pred)))
+        #
+        # print('====================')
+        #
+        # # 2.精确率
+        #
+        # # print(precision_score(y_true, y_pred, average='macro'))  #
+        # # print(precision_score(y_true, y_pred, average='micro'))  #
+        # # print(precision_score(y_true, y_pred, average='weighted'))  #
+        #
+        # print('pos-1 precision: ', precision_score(y_true, y_pred, average='binary'))
+        #
+        # precision_list = precision_score(y_true, y_pred, average=None)
+        #
+        # print('neg-0 precision:{}, pos-1 precision:{}  '.format(precision_list[0], precision_list[1]))
+        #
+        # print('====================')
+        #
+        # # 3. 召回率
+        #
+        # # print(recall_score(y_true, y_pred, average='macro'))  #
+        # # print(recall_score(y_true, y_pred, average='micro'))  #
+        # # print(recall_score(y_true, y_pred, average='weighted'))  #
+        #
+        # print('pos-1 recall: ', recall_score(y_true, y_pred, average='binary'))
+        #
+        # recall_list = recall_score(y_true, y_pred, average=None)
+        #
+        # print('neg-0 recall:{}, pos-1 recall:{}  '.format(recall_list[0], recall_list[1]))
+        #
+        # print('====================')
+        #
+        # # 4. F1-score
+        #
+        # # print(f1_score(y_true, y_pred, average='macro'))
+        # # print(f1_score(y_true, y_pred, average='micro'))
+        # # print(f1_score(y_true, y_pred, average='weighted'))
+        #
+        # print('pos-1 f1_score: ', f1_score(y_true, y_pred, average='binary'))
+        #
+        # f1_score_list = f1_score(y_true, y_pred, average=None)
+        #
+        # print('neg-0 f1_score:{}, pos-1 f1_score:{}  '.format(f1_score_list[0], f1_score_list[1]))
+        #
+        # print('====================')
+        #
+        # # 画出 P-R 曲线
+        #
+        # # sklearn 的 GBDT 作为基线
+        # clf2 = GradientBoostingClassifier(loss='deviance', learning_rate=0.1, n_estimators=30
+        #                                   , max_depth=3
+        #                                   )
+        #
+        # clf2.fit(trainDataArr, trainLabelArr)
+        # y_pred = clf.predict(testDataArr)
+        #
+        # y_scores = clf.predict_proba(testDataArr)
+        #
+        # y_true = testLabelArr
+        #
+        # precision, recall, thresholds = precision_recall_curve(y_true, y_scores)
+        #
+        # y_scores2 = clf2.predict_proba(testDataArr)[:, 1]  # 第 1 列 , 表示为 正例的概率
+        #
+        # precision2, recall2, thresholds2 = precision_recall_curve(y_true, y_scores2)
+        #
+        # # disp = PrecisionRecallDisplay(precision=precision, recall=recall)
+        # # disp.plot()
+        #
+        # plt.plot(recall, precision, label="GDBT_2Classifier(xrh)", color='navy')  #
+        #
+        # plt.plot(recall2, precision2, label="GradientBoostingClassifier(sklearn)", color='turquoise')
+        #
+        # plt.title(' Precision-Recall curve ')
+        #
+        # # plt.ylim([0.0, 1.05]) # Y 轴的取值范围
+        # # plt.xlim([0.0, 1.0]) # X 轴的取值范围
+        #
+        # plt.xlabel("recall")
+        # plt.ylabel("precision")
+        #
+        # plt.legend(loc=(0, -.38), prop=dict(size=14))  # 图例
+        #
+        # plt.show()
+        #
+        # # ROC 曲线
+        # fpr, tpr, _ = roc_curve(y_true, y_scores)
+        #
+        # fpr2, tpr2, _ = roc_curve(y_true, y_scores2)
+        #
+        # plt.plot([0, 1], [0, 1], color='navy', linestyle='--')
+        #
+        # plt.plot(fpr, tpr, label="GDBT_2Classifier(xrh)", color='darkorange')  #
+        #
+        # plt.plot(fpr2, tpr2, label="GradientBoostingClassifier(sklearn)", color='turquoise')
+        #
+        # # plt.xlim( [0.0, 1.0] )
+        # # plt.ylim( [0.0, 1.05] )
+        #
+        # plt.xlabel('False Positive Rate')
+        # plt.ylabel('True Positive Rate')
+        #
+        # plt.legend(loc=(0, -.38), prop=dict(size=14))  # 图例
+        #
+        # plt.show()
 
 
     def test_tiny_multiclassification_dataset(self):
@@ -820,15 +841,17 @@ class Test:
 if __name__ == '__main__':
     test = Test()
 
+    # test.test_tiny_regress_dataset()
+
     # test.test_regress_dataset()
 
-    # test.test_Mnist_dataset_2classification(60000,10000)
+    test.test_Mnist_dataset_2classification(6000,1000)
 
     # test.test_tiny_2classification_dataset()
 
     # test.test_tiny_multiclassification_dataset()
 
-    test.test_Mnist_dataset(60000,10000)
+    # test.test_Mnist_dataset(60000,10000)
 
     # test.test_iris_dataset()
 
