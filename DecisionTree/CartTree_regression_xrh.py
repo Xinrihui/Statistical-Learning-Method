@@ -1002,7 +1002,7 @@ class RegresionTree_XGBoost():
 
             # len(feature_value_set) == 0 : 所有 切分(特征, 特征值) 的组合 已经用完,
             #  np.shape(trainDataArr)[0] <= self.min_sample_split 划分节点时需要保留的样本数。当某节点的样本数小于某个值时，就当做叶子节点，不允许再分裂
-            #   tree_depth >= self.max_depth 树的深度达到最大深度 ,
+            #  tree_depth >= self.max_depth 树的深度达到最大深度 ,
             #  prev_max_gain <= self.gama 考虑 切分的最大的增益是否比 γ(gama) 大，如果小于γ则不进行分裂（预剪枝）
 
                 T.label = leaf_label #  叶子节点的标签

@@ -70,11 +70,29 @@ class XGBoost_v1:
 
     test3: 二分类任务
     数据集：Mnist
-    参数: error_rate_threshold=0.01, ,max_iter=30, max_depth=3 , learning_rate=0.5 ,gama=0, reg_lambda=1.0
+    参数: error_rate_threshold=0.01, ,max_iter=30, max_depth=3 , learning_rate=0.5 ,gama=0.1, reg_lambda=1.0
     训练集数量：60000
     测试集数量：10000
     正确率：0.9891
     模型训练时长：108s
+
+
+    test4: 多分类任务
+    数据集：Mnist
+    参数: error_rate_threshold=0.01, ,max_iter=30, max_depth=3 , learning_rate=0.5 ,gama=0, reg_lambda=1.0
+    训练集数量：6000
+    测试集数量：1000
+    正确率：0.859
+    模型训练时长：126s
+
+    test5: 多分类任务
+    数据集：Mnist
+    参数: error_rate_threshold=0.01, ,max_iter=30, max_depth=3 , learning_rate=0.5 ,gama=0, reg_lambda=1.0
+    训练集数量：60000
+    测试集数量：10000
+    正确率：0.911
+    模型训练时长：1396s
+
 
     """
 
@@ -98,6 +116,7 @@ class XGBoost_v1:
                             (1) reg:squarederror：损失平方回归
                             (2) binary:logistic：二元分类的逻辑回归，输出概率
                             (3) multi:softmax：使用softmax目标函数 进行多类分类，还需要设置 num_class（类数）
+
         :param num_class: 多分类时的 分类数目
         :param base_score: 所有实例的 初始预测得分 F_0
         :param gama:  损失函数中 树的总叶子个数 T 的系数, 可以控制模型的复杂度
@@ -953,7 +972,7 @@ if __name__ == '__main__':
 
     # test.test_tiny_regress_dataset()
 
-    test.test_regress_dataset()
+    # test.test_regress_dataset()
 
     # test.test_Mnist_dataset_2classification(6000,1000)
 
@@ -964,6 +983,8 @@ if __name__ == '__main__':
     # test.test_tiny_multiclassification_dataset()
 
     # test.test_Mnist_dataset(6000,1000)
+
+    test.test_Mnist_dataset(60000, 10000)
 
     # test.test_iris_dataset()
 
