@@ -46,21 +46,35 @@ class XGBoost_v1:
     实现细节：
     (1) 使用  完全贪心算法 划分子节点 , 未实现 近似算法
     (2) 未实现 稀疏性感知（Sparsity Awareness）
-    (3) 加权分位数略图（Weighted Quantile Sketch）
+    (3) 未实现 加权分位数略图（Weighted Quantile Sketch）
     (4) 未实现 分块并行
 
     Author: xrh
     Date: 2021-05-07
 
+    test1: 回归任务
+    数据集：boston房价数据集
+    参数: error_rate_threshold=0.01, max_iter=100, max_depth=3,learning_rate=0.1,gama=1.0, reg_lambda=1.0
+    训练集数量：455
+    测试集数量：51
+    测试集的 MSE： 8.66
+    模型训练时长：29s
 
-    test1: 多分类任务
-
+    test2: 二分类任务
     数据集：Mnist
-    参数: error_rate_threshold=0.01, max_iter=20, max_depth=3 , learning_rate=0.5
-    训练集数量：
-    测试集数量：
-    正确率：
-    模型训练时长：
+    参数: error_rate_threshold=0.01, ,max_iter=30, max_depth=3 , learning_rate=0.5 ,gama=0, reg_lambda=1.0
+    训练集数量：6000
+    测试集数量：1000
+    正确率：0.978
+    模型训练时长： 9s
+
+    test3: 二分类任务
+    数据集：Mnist
+    参数: error_rate_threshold=0.01, ,max_iter=30, max_depth=3 , learning_rate=0.5 ,gama=0, reg_lambda=1.0
+    训练集数量：60000
+    测试集数量：10000
+    正确率：0.9891
+    模型训练时长：108s
 
     """
 
@@ -71,7 +85,7 @@ class XGBoost_v1:
                         objective='binary:logistic',
                         num_class=None ,
                         base_score=0.0,
-                        gama=0.0,
+                        gama=0.1,
                         reg_lambda=1.0 ):
         """
         :param print_log: 打印 Cart树
@@ -91,7 +105,7 @@ class XGBoost_v1:
 
 
         """
-        self.N=0 # 训练集的样本个数
+        # self.N=0 # 训练集的样本个数
 
         self.print_log = print_log
 
@@ -147,7 +161,7 @@ class XGBoost_v1:
 
         return  np.nan_to_num( np.exp(X - logsumexp(X, axis=0)) )  # softmax处理，将结果转化为概率
 
-    def init_y_predict(self,F_0):
+    def init_y_predict(self , F_0 , N):
         """
         m=0 :
         初始化 y_predict
@@ -157,10 +171,15 @@ class XGBoost_v1:
         y_predict=None
 
         if self.objective ==  "reg:squarederror": # 回归
-            y_predict = np.array( [ F_0 ] * self.N )
+            y_predict = np.array( [ F_0 ] * N )
 
         elif self.objective == "binary:logistic": # 二分类
-            y_predict = np.array( [ self.sigmoid(F_0) ] * self.N)
+            y_predict = np.array( [ self.sigmoid(F_0) ] * N)
+
+        elif self.objective == "multi:softmax":
+
+            y_predict = np.transpose([self.softmax(F_0)] * N) #  shape : (K, N)
+
 
         return y_predict
 
@@ -189,10 +208,23 @@ class XGBoost_v1:
             g = y_predict - y
             h=  np.ones_like(g)
 
-
         elif self.objective == "binary:logistic": # 二分类
+
             g = y_predict - y
             h = y_predict*(1-y_predict)
+
+        elif self.objective == "multi:softmax": # 二分类
+
+            g = (y_predict - y)
+
+            # 以下实现 参考 xgboost 源码
+            # ref:
+            # https://github.com/dmlc/xgboost/blob/master/src/objective/multiclass_obj.cu
+            # class SoftmaxMultiClassObj
+            # -> void GetGradient(
+
+            h =  2*y_predict*(1-y_predict)
+            h[h<1e-16]= 1e-16 # h 不能小于0
 
         return g,h
 
@@ -211,6 +243,10 @@ class XGBoost_v1:
 
         elif self.objective == "binary:logistic": # 二分类
             y_predict = self.sigmoid(F)
+
+        elif self.objective == "multi:softmax":
+
+            y_predict = self.softmax(F)
 
         return y_predict
 
@@ -242,6 +278,15 @@ class XGBoost_v1:
 
             error_rate = np.mean(err_arr) # loss 为 分类错误率
 
+        elif self.objective == "multi:softmax": # 多分类
+
+            y_label = np.argmax( y_predict, axis=0 )  # 取 概率最大的 作为 预测的标签
+
+            err_arr = np.ones( N, dtype=int )
+            err_arr[y_label == y] = 0
+            error_rate = np.mean(err_arr)  # 计算训练误差
+
+
         return error_rate
 
     def fit(self, X, y ,learning_rate,train_error=True):
@@ -252,21 +297,77 @@ class XGBoost_v1:
         :param X: 特征数据 , shape=(N_sample, N_feature)
         :param y: 标签数据 , shape=(N_sample,)
         :param learning_rate: 学习率
-        :param train_error:  在训练模型时, 计算模型在 训练集上的误差率
+        :param train_error:  在训练模型时, 计算 并输出 模型在 训练集上的误差率
         :return:
         """
 
-        self.N = np.shape(X)[0]  # 样本的个数
+        N = np.shape(X)[0]  # 样本的个数
 
-        if self.objective == "binary:logistic" or 'reg:squarederror': # 二分类 or 回归
+        if self.objective == "multi:softmax": # 多分类
+
+            F_0 =  np.array([self.base_score]*self.num_class)  # shape : (K,)
+
+            self.G.append(F_0)
+
+            F = np.transpose([F_0] * N)  # 对 F_0 进行复制,  shape : (K, N)
+
+            y_predict = self.init_y_predict(F_0,N) #  shape : (K, N)
+
+            feature_value_set = RegresionTree_XGBoost.get_feature_value_set(X)  # 可供选择的特征集合 , 包括 (特征, 切分值)
+
+            y_one_hot = (y == np.array(range(self.num_class)).reshape(-1, 1)).astype(
+                np.int8)  # 将 向量yd 扩展为 one-hot , shape: (K,N)
+
+            for m in range(1, self.max_iter):  # 进行 第 m 轮迭代
+
+                DT_list = []
+
+                for k in range(self.num_class):  # 依次训练 K 个 二分类器
+
+                    print('======= train No.{} 2Classifier ======='.format(k))
+
+                    g,h= self.cal_g_h(y_one_hot[k],y_predict[k]) # y_predict[k]  shape:(N,)
+
+                    # 训练 用于 2分类的 回归树
+                    DT = RegresionTree_XGBoost(gama=self.gama, reg_lambda=self.reg_lambda, max_depth=self.max_depth,
+                                               print_log=self.print_log)
+
+                    DT.fit(X, g, h, feature_value_set=feature_value_set)
+
+                    f_m =  DT.predict(X)
+
+                    DT_list.append(DT)
+
+                    F[k] = F[k] + learning_rate * f_m  # F[k]  shape:(N,)
+
+
+                y_predict = self.update_y_predict(F)
+
+                self.G.append((learning_rate, DT_list))  # 存储 基分类器
+
+                # 计算 当前 所有弱分类器加权 得到的 最终分类器 的 分类错误率
+
+                if train_error:
+
+                    y_predict_copy = y_predict.copy() # y_predict 下一轮迭代 还要使用, 不能被修改
+
+                    error_rate= self.model_error_rate( y , y_predict_copy )
+
+                    print( 'round:{}, error_rate :{}'.format( m, error_rate ) )
+                    print( '======================' )
+
+                    if error_rate < self.error_rate_threshold:  # 错误率 已经小于 阈值, 则停止训练
+                        break
+
+        elif self.objective in ('binary:logistic' , 'reg:squarederror') : # 二分类 or 回归
 
             F_0 = self.base_score
 
             self.G.append(F_0)
 
-            F = np.array( [self.base_score] * self.N ) # shape: (N, )
+            F = np.array( [self.base_score] * N ) # shape: (N, )
 
-            y_predict= self.init_y_predict(F_0)
+            y_predict= self.init_y_predict(F_0,N)
 
             feature_value_set = RegresionTree_XGBoost.get_feature_value_set(X)  # 可供选择的特征集合 , 包括 (特征, 切分值)
 
@@ -278,7 +379,7 @@ class XGBoost_v1:
 
                 RT.fit( X, g, h, feature_value_set=feature_value_set )
 
-                f_m = RT.predict(X) # 第 m 颗树
+                f_m =  RT.predict(X) # 第 m 颗树
 
                 self.G.append( (learning_rate, RT) )  # 存储 基分类器
 
@@ -290,7 +391,7 @@ class XGBoost_v1:
 
                     y_predict_copy = y_predict.copy() # y_predict 下一轮迭代 还要使用, 不能被修改
 
-                    error_rate= self.model_error_rate(y,y_predict_copy)
+                    error_rate= self.model_error_rate( y,y_predict_copy)
 
                     print( 'round:{}, error_rate :{}'.format( m, error_rate ) )
                     print( '======================' )
@@ -306,46 +407,74 @@ class XGBoost_v1:
         :param X: 特征数据 , shape=(N_sample, N_feature)
         :return:
         """
+        N = np.shape(X)[0]
 
-        f = 0  # 最终分类器
+        y_predict = None  # 输出的标签
 
-        f += self.G[0]  # 第一个 存储的是 初始化情况
+        F_0 = self.G[0]  # 最终分类器
 
-        y_predict=None # 输出的标签
+        if self.objective == "multi:softmax":
 
-        for alpha, RT in self.G[1:]:
-            f_m = RT.predict(X)
-            f += alpha * f_m
+            F = np.transpose([F_0] * N)  # shape : (K, N)
 
-        if self.objective == "reg:squarederror":  # 回归
+            for alpha, DT_list in self.G[1:]:
 
-            y_predict=f
+                for k in range(self.num_class):
+                    DT = DT_list[k]
 
-        elif self.objective == "binary:logistic":
+                    # f_m = (self.num_class / (self.num_class - 1)) * DT.predict(X) # shape:(N,)
 
-            y_predict = self.sigmoid(f)
+                    f_m =   DT.predict(X)
 
-            y_predict[y_predict >= 0.5] = 1  # 概率 大于 0.5 被标记为 正例
-            y_predict[y_predict < 0.5] = 0  # 概率 小于 0.5 被标记为 负例
+                    F[k] += alpha * f_m  # F[k]  shape:(N,)
+
+            prob = self.softmax(F) # F shape:(K,N) ;  prob shape:(K,N)
+
+            y_predict = np.argmax(prob, axis=0) # y_predict shape:(N,)
+
+
+        elif self.objective in ("reg:squarederror" , "binary:logistic"):
+
+            F  = F_0  # 第一个 存储的是 初始化情况
+
+            for alpha, RT in self.G[1:]:
+                f_m = RT.predict(X)
+                F += alpha * f_m
+
+            if self.objective == "reg:squarederror":  # 回归
+
+                y_predict=F
+
+            elif self.objective == "binary:logistic":
+
+                y_predict = self.sigmoid(F)
+
+                y_predict[y_predict >= 0.5] = 1  # 概率 大于 0.5 被标记为 正例
+                y_predict[y_predict < 0.5] = 0  # 概率 小于 0.5 被标记为 负例
 
         return y_predict
 
 
     def score(self, X, y):
         """
-        使用 测试数据集 对模型进行评价, 返回正确率
+        使用 测试数据集 对模型进行评价, 返回 正确率, 仅适用于分类任务
 
         :param X: 特征数据 , shape=(N_sample, N_feature)
         :param y: 标签数据 , shape=(N_sample,)
         :return:  错误率 error
 
         """
+        N= X.shape[0]
 
         y_predict = self.predict(X)
 
-        loss=self.model_error_rate(y,y_predict)
+        err_arr = np.ones(N, dtype=int)
+        err_arr[y_predict == y] = 0
+        error_rate = np.mean(err_arr)
 
-        return loss
+        accuracy= 1- error_rate
+
+        return accuracy
 
 
 class Test:
@@ -354,7 +483,7 @@ class Test:
         """
 
         利用 https://blog.csdn.net/zpalyq110/article/details/79527653 中的数据集
-        测试  回归 问题
+        测试  xgboost 回归
 
         :return:
         """
@@ -398,7 +527,7 @@ class Test:
         """
 
         利用 boston房价 数据集
-        测试  GBDT  回归
+        测试  xgboost  回归
 
         :return:
         """
@@ -424,7 +553,7 @@ class Test:
                           max_iter=100,
                           max_depth=3,
                           gama=1.0,
-                          reg_lambda=0.0 )
+                          reg_lambda=1.0 )
         clf.fit( X_train, y_train,learning_rate=0.1 )
 
         print(' model complete ')
@@ -570,8 +699,7 @@ class Test:
         testDataArr = np.array(testDataList)
         testLabelArr = np.array(testLabelList)
 
-        accuracy=1-clf.score(testDataArr, testLabelArr)
-        print('test dataset accuracy: {} '.format( accuracy ))
+        print('test dataset accuracy: {} '.format( clf.score(testDataArr, testLabelArr) ))
 
         # 模型评估
 
@@ -688,7 +816,7 @@ class Test:
 
     def test_tiny_multiclassification_dataset(self):
         """
-        使用 https://zhuanlan.zhihu.com/p/91652813 中的数据测试 GBDT-多分类
+        使用 https://zhuanlan.zhihu.com/p/91652813 中的数据测试  多分类
 
         :return:
         """
@@ -711,7 +839,7 @@ class Test:
 
         y_train = np.array([[0], [0], [0], [0], [0], [1], [1], [1], [1], [1], [2], [2], [2], [2]]).ravel()
 
-        clf = GBDT_MultiClassifier( error_rate_threshold=0.01, max_iter=5, max_depth=1 )
+        clf = XGBoost_v1( error_rate_threshold=0.01,objective="multi:softmax" ,num_class=3,max_iter=5, max_depth=1 , print_log=True)
         clf.fit(X_train, y_train,learning_rate=1)
 
 
@@ -762,7 +890,7 @@ class Test:
         """
          Mnist (手写数字) 数据集
 
-        测试 AdaBoost  的 多分类
+        测试  模型的 多分类
 
         :param n_train: 使用训练数据集的规模
         :param n_test: 使用测试数据集的规模
@@ -781,49 +909,9 @@ class Test:
         print('start training model....')
         start = time.time()
 
-        """
-        调参：
-        loss：损失函数。有deviance和exponential两种。deviance是采用对数似然，exponential是指数损失，后者相当于AdaBoost。
-        n_estimators:最大弱学习器个数，默认是100，调参时要注意过拟合或欠拟合，一般和learning_rate一起考虑。
-        criterion: 切分叶子节点时, 选择切分特征考虑的误差函数, 默认是 “ friedman_mse”（ Friedman 均方误差），“ mse”（均方误差）和“ mae”（均绝对误差）
-        learning_rate:步长，即每个弱学习器的权重缩减系数，默认为0.1，取值范围0-1，当取值为1时，相当于权重不缩减。较小的learning_rate相当于更多的迭代次数。
-        subsample:子采样，默认为1，取值范围(0,1]，当取值为1时，相当于没有采样。小于1时，即进行采样，按比例采样得到的样本去构建弱学习器。这样做可以防止过拟合，但是值不能太低，会造成高方差。
-        init：初始化弱学习器。不使用的话就是第一轮迭代构建的弱学习器.如果没有先验的话就可以不用管
-        由于GBDT使用CART回归决策树。以下参数用于调优弱学习器，主要都是为了防止过拟合
-        max_feature：树分裂时考虑的最大特征数，默认为None，也就是考虑所有特征。可以取值有：log2,auto,sqrt
-        max_depth：CART最大深度，默认为None
-        min_sample_split：划分节点时需要保留的样本数。当某节点的样本数小于某个值时，就当做叶子节点，不允许再分裂。默认是2
-        min_sample_leaf：叶子节点最少样本数。如果某个叶子节点数量少于某个值，会同它的兄弟节点一起被剪枝。默认是1
-        min_weight_fraction_leaf：叶子节点最小的样本权重和。如果小于某个值，会同它的兄弟节点一起被剪枝。一般用于权重变化的样本。默认是0
-        min_leaf_nodes：最大叶子节点数
-        
-        ref: https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.GradientBoostingClassifier.html
-        
-        测试1: 
-        max_depth=3, n_estimators=30, learning_rate=0.8, 
-        n_train=60000
-        n_test=10000
-        训练时间 : 795.5719292163849
-        准确率: 0.8883 
-        
-        测试2:
-        max_depth=3, n_estimators=20, learning_rate=0.5, 
-        n_train=60000
-        n_test=10000
-        训练时间 : 589 s
-        准确率: 0.9197 
-        
-        """
+        clf = XGBoost_v1( error_rate_threshold=0.01,objective="multi:softmax" ,num_class=10 ,max_iter=20, max_depth=3 )
+        clf.fit(trainDataArr, trainLabelArr,learning_rate=0.5)
 
-        clf = GradientBoostingClassifier(loss='deviance',criterion='mse', n_estimators=20, learning_rate=0.5,
-                                         max_depth=3)
-
-        clf.fit(trainDataArr, trainLabelArr)
-
-
-
-        # clf = GBDT_MultiClassifier( error_rate_threshold=0.01, max_iter=20, max_depth=3 )
-        # clf.fit( trainDataArr, trainLabelArr,learning_rate= 0.5 ) #
 
         # 结束时间
         end = time.time()
@@ -837,23 +925,27 @@ class Test:
         testDataArr = np.array(testDataList)
         testLabelArr = np.array(testLabelList)
 
-        print('test dataset accuracy: {} '.format(clf.score(testDataArr, testLabelArr)))
+        print('test dataset accuracy: {} '.format( clf.score(testDataArr, testLabelArr) ))
 
     def test_iris_dataset(self):
 
-        # 使用iris数据集，其中有三个分类， y的取值为0,1，2
+        # 使用iris数据集，其中有三个分类， y的取值为0 , 1 , 2
+
         X, y = datasets.load_iris(True)  # 包括150行记录
         # 将数据集一分为二，训练数据占80%，测试数据占20%
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2 , random_state=188)
 
         # clf = GradientBoostingClassifier(loss='deviance',n_estimators=3, learning_rate=0.1,
         #                                  max_depth=2)
         # clf.fit(X_train, y_train)
 
-        clf = GBDT_MultiClassifier( error_rate_threshold=0.01, max_iter=5, max_depth=3 )
-        clf.fit(X_train, y_train,learning_rate=0.8)
+        clf = XGBoost_v1( error_rate_threshold=0.01,objective="multi:softmax" ,num_class=3 ,max_iter=3, max_depth=2, print_log=True)
+        clf.fit(X_train, y_train,learning_rate=0.5)
 
-        print(clf.score(X_test, y_test))
+        clf.predict(X_test)
+
+
+        print('test dataset accuracy: {} '.format( clf.score(X_test, y_test) ))
 
 
 if __name__ == '__main__':
@@ -861,15 +953,17 @@ if __name__ == '__main__':
 
     # test.test_tiny_regress_dataset()
 
-    # test.test_regress_dataset()
+    test.test_regress_dataset()
 
-    test.test_Mnist_dataset_2classification(6000,1000)
+    # test.test_Mnist_dataset_2classification(6000,1000)
+
+    # test.test_Mnist_dataset_2classification(60000, 10000)
 
     # test.test_tiny_2classification_dataset()
 
     # test.test_tiny_multiclassification_dataset()
 
-    # test.test_Mnist_dataset(60000,10000)
+    # test.test_Mnist_dataset(6000,1000)
 
     # test.test_iris_dataset()
 

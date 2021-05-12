@@ -43,6 +43,13 @@ class GBDT_Regressor:
 
     ref: https://blog.csdn.net/zpalyq110/article/details/79527653
 
+    test0: 回归 任务
+    数据集：boston房价 数据集
+    参数: error_rate_threshold=0.01, max_iter=100, max_depth=3,learning_rate=0.1
+    训练集数量：455
+    测试集数量：51
+    测试集的 MSE： 7.610308909461337
+    模型训练时长：160s
 
     """
 
@@ -471,7 +478,7 @@ class GBDT_MultiClassifier:
 
             # 计算 当前 所有弱分类器加权 得到的 最终分类器 的 分类错误率
 
-            G = self.softmax( F )
+            G = self.softmax( F ) #  F shape: (K,N)
 
             G_label = np.argmax( G, axis=0 )  # 取 概率最大的 作为 预测的标签
 
@@ -610,7 +617,6 @@ class Test:
 
     def test_regress_dataset(self):
         """
-
         利用 boston房价 数据集
         测试  GBDT  回归
 
@@ -654,7 +660,7 @@ class Test:
 
         y_pred_test = clf.predict(X_test)
 
-        print('by sklearn , the squared_error:', mean_squared_error(y_test, y_pred))  # 8
+        print('by sklearn , the squared_error:', mean_squared_error(y_test, y_pred))  # the squared_error: 8.46788133276128
 
         print('by xrh , the squared_error:', mean_squared_error(y_test, y_pred_test))  #
 
@@ -794,13 +800,13 @@ class Test:
         
         """
 
-        # clf = GradientBoostingClassifier(loss='deviance', learning_rate=0.1, n_estimators=50
-        #                                   , max_depth=3
-        #                                 )
-        # clf.fit(trainDataArr, trainLabelArr)
+        clf = GradientBoostingClassifier(loss='deviance', learning_rate=0.1, n_estimators=50
+                                          , max_depth=3
+                                        )
+        clf.fit(trainDataArr, trainLabelArr)
 
-        clf = GBDT_2Classifier( error_rate_threshold=0.01, max_iter=30, max_depth=3 )
-        clf.fit(trainDataArr, trainLabelArr,learning_rate=0.2)
+        # clf = GBDT_2Classifier( error_rate_threshold=0.01, max_iter=30, max_depth=3 )
+        # clf.fit(trainDataArr, trainLabelArr,learning_rate=0.2)
 
 
         # 结束时间
@@ -1059,15 +1065,14 @@ class Test:
         
         """
 
-        clf = GradientBoostingClassifier(loss='deviance',criterion='mse', n_estimators=20, learning_rate=0.5,
-                                         max_depth=3)
+        # clf = GradientBoostingClassifier(loss='deviance',criterion='mse', n_estimators=20, learning_rate=0.5,
+        #                                  max_depth=3)
+        #
+        # clf.fit(trainDataArr, trainLabelArr)
 
-        clf.fit(trainDataArr, trainLabelArr)
 
-
-
-        # clf = GBDT_MultiClassifier( error_rate_threshold=0.01, max_iter=20, max_depth=3 )
-        # clf.fit( trainDataArr, trainLabelArr,learning_rate= 0.5 ) #
+        clf = GBDT_MultiClassifier( error_rate_threshold=0.01, max_iter=20, max_depth=3 )
+        clf.fit( trainDataArr, trainLabelArr,learning_rate= 0.5 ) #
 
         # 结束时间
         end = time.time()
@@ -1088,7 +1093,7 @@ class Test:
         # 使用iris数据集，其中有三个分类， y的取值为0,1，2
         X, y = datasets.load_iris(True)  # 包括150行记录
         # 将数据集一分为二，训练数据占80%，测试数据占20%
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=188)
 
         # clf = GradientBoostingClassifier(loss='deviance',n_estimators=3, learning_rate=0.1,
         #                                  max_depth=2)
@@ -1105,7 +1110,7 @@ if __name__ == '__main__':
 
     # test.test_tiny_regress_dataset()
 
-    test.test_regress_dataset()
+    # test.test_regress_dataset()
 
     # test.test_Mnist_dataset_2classification(60000,10000)
 
@@ -1113,8 +1118,10 @@ if __name__ == '__main__':
 
     # test.test_tiny_multiclassification_dataset()
 
+    # test.test_Mnist_dataset(6000, 1000)
+
     # test.test_Mnist_dataset(60000,10000)
 
-    # test.test_iris_dataset()
+    test.test_iris_dataset()
 
 

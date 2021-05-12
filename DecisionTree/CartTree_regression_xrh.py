@@ -878,12 +878,12 @@ class RegresionTree_XGBoost():
     def select_max_gain_feature(self,trainDataArr, gArr, hArr, feature_value_set):
         """
 
-        选择 最优的 切分点
+        选择 最优的 切分特征 与 切分点
 
         :param trainDataArr: 样本集合 X
         :param gArr: 每一个样本的 损失函数 对 F 的一阶梯度
         :param hArr: 每一个样本的  损失函数 对 F 的 二阶梯度
-        :param feature_value_set:
+        :param feature_value_set: 可用的 (特征, 切分值) 的集合
         :return:
         """
 
@@ -892,7 +892,10 @@ class RegresionTree_XGBoost():
 
         max_Gain = float('-inf')
 
-        loss_old = (np.sum(gArr)**2) /  ( np.sum(hArr) + self.reg_lambda )  # 切分前的损失
+        G=np.sum(gArr)
+        H=np.sum(hArr)
+
+        loss_old = ( G**2) /  ( H + self.reg_lambda )  # 切分前的损失
 
         for A_j,s_i  in feature_value_set:  # 遍历 (特征, 切分值)
 
@@ -902,10 +905,16 @@ class RegresionTree_XGBoost():
             R1_g = gArr[trainDataArr_DevFeature <= s_i]  # 特征值 取值为 <= s_i
             R1_h = hArr[trainDataArr_DevFeature <= s_i]
 
-            R2_g = gArr[trainDataArr_DevFeature > s_i]
-            R2_h = hArr[trainDataArr_DevFeature > s_i]
+            # R2_g = gArr[trainDataArr_DevFeature > s_i]
+            # R2_h = hArr[trainDataArr_DevFeature > s_i]
 
-            loss_new = ( (np.sum(R1_g)**2) / (np.sum(R1_h) + self.reg_lambda) ) +  ( (np.sum(R2_g)**2) / ( np.sum(R2_h) + self.reg_lambda ) )
+            GL = np.sum(R1_g)
+            HL = np.sum(R1_h)
+
+            GR = G - GL # 只算左边, 右边用总和 减去左边得到, 提升效率
+            HR = H - HL
+
+            loss_new =  (GL**2) / ( HL + self.reg_lambda)   +   (GR**2) / ( HR + self.reg_lambda )
 
             gain = loss_new - loss_old
 
@@ -932,6 +941,7 @@ class RegresionTree_XGBoost():
         """
 
         numerator = np.sum( gArr )
+
         if numerator == 0:
             return 0.0
 
@@ -973,7 +983,7 @@ class RegresionTree_XGBoost():
         T.prev_feature = prev_feature
         T.prev_feature_split = prev_feature_split
 
-        if np.shape(trainDataArr)[0] == 0 :  # 划分后 数据集已经为空
+        if np.shape(trainDataArr)[0] == 0 or prev_max_gain <= self.gama:  # 划分后 数据集已经为空
 
             T.label = father_label  # 说明不能再往下划分了, 使用 上一个 节点给它的标签值
 
@@ -988,7 +998,7 @@ class RegresionTree_XGBoost():
             if len(feature_value_set) == 0 \
                     or np.shape(trainDataArr)[0] <= self.min_sample_split \
                     or tree_depth >= self.max_depth \
-                    or prev_max_gain <= self.gama:
+                    :
 
             # len(feature_value_set) == 0 : 所有 切分(特征, 特征值) 的组合 已经用完,
             #  np.shape(trainDataArr)[0] <= self.min_sample_split 划分节点时需要保留的样本数。当某节点的样本数小于某个值时，就当做叶子节点，不允许再分裂

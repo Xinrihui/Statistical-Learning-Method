@@ -13,108 +13,105 @@ import pprint
 import time
 
 
-class DecisonTree_MathLib:
-    """
-    决策树 相关的 数学函数库
 
+class DecisonTree_Lib:
+    """
+    决策树 相关的 函数库
+
+    不使用 pandas 的 库函数( eg. groupby() ) , 而使用 numpy, 提升 训练速度
+    
     Author: xrh
-    Date: 2021-03-12
+    Date: 2021-03-14
+    
+    ref: https://github.com/Dod-o/Statistical-Learning-Method_Code.git
 
     """
 
-    def calc_ent(self,datasets):
+    def calcH_D(self, trainLabelArr):
         """
-        计算数据集的 熵
+        计算数据集D的经验熵，参考公式5.7 经验熵的计算
         
+        
+        :param trainLabelArr:当前数据集的标签集
+        :return: 经验熵
+
         """
 
-        label = datasets.columns[-1]  # 最后一列 为标签
+        D = len(trainLabelArr)  # 数据集的总行数
 
-        # pandas 分组 https://www.yiibai.com/pandas/python_pandas_groupby.html
-        grouped = datasets.groupby(label)
-
-        D = datasets.shape[0]  # 数据集的总行数
+        LabelSet = {ele for ele in trainLabelArr}  # trainLabelArr 中所有标签的类别
 
         H_D = 0
 
-        for name, group in grouped:
-
-            C_k = group.shape[0]
+        for label in LabelSet:
+            C_k = len(trainLabelArr[trainLabelArr == label])
             p = C_k / D
-            H_D += -p*log2(p)
+            H_D += -p * log2(p)
 
         return H_D
 
-    def calc_cond_ent(self,datasets, axis=0):
+    def calcH_D_A(self, trainDataArr_DevFeature, trainLabelArr):
         """
-        计算数据集的 条件熵
-
-        axis 为选择的 特征
+        计算 经验条件熵
+        
+        只对 所关心的 特征的那一列 进行计算，提升训练速度
+        
+        :param trainDataArr_DevFeature: 切割后只有feature那列数据的数组
+        :param trainLabelArr: 标签集数组
+        :return: 经验条件熵
 
         """
-        label = datasets.columns[-1]  # 最后一列 为标签 Y
 
-        H_D_A = 0  # 条件熵
+        A_set = {A_i for A_i in trainDataArr_DevFeature}  # trainDataArr_DevFeature 中的 所有取值
 
-        A = datasets.columns[axis]
+        D = len(trainLabelArr)  # 数据集的总行数
 
-        D = datasets.shape[0]  # 数据集的总行数
+        H_D_A = 0
 
-        grouped = datasets.groupby(A)
+        for i in A_set:
+            D_i = len(trainDataArr_DevFeature[trainDataArr_DevFeature == i])  # 特征值为 i 的 样本的总个数
 
-        for name, group in grouped:
+            p_i = D_i / D
 
-            D_i = group.shape[0]
-
-            p_i = D_i/D
-
-            sub_grouped = group.groupby(label)
-
-            for sub_name, sub_group in sub_grouped:
-
-                D_ik = sub_group.shape[0]
-
-                p_ik = D_ik/D_i
-
-                H_D_A += -p_i*p_ik*log2(p_ik)
+            H_D_A += p_i * self.calcH_D(trainLabelArr[trainDataArr_DevFeature == i])
 
         return H_D_A
 
-    def info_gain(self,ent, cond_ent):
+    def info_gain(self, H_D, H_D_A):
         """
         信息增益
-        :param ent:
-        :param cond_ent:
+        :param H_D:经验熵
+        :param H_D_A:经验条件熵
         :return:
         """
 
-        return ent-cond_ent
+        return H_D - H_D_A
 
-    def info_gain_train(self,datasets, feature_set=None):
+    def select_max_info_gain(self, trainDataArr, trainLabelArr, feature_set=None):
+
         """
-
         选择 信息增益 最大的特征
 
-        :param datasets:
+        :param trainDataArr: shape=(60000,784)
+        :param trainLabelArr: shape=(60000,1)
         :param feature_set:  可供选择 的特征集合
         :return:
         """
 
         if feature_set == None:
-            feature_Num = len(datasets.columns) - 1  # 特征的总数（最后一列为标签, 不是特征）
-
+            feature_Num = len(trainDataArr[0])  # 特征的总数
             feature_set = set(range(feature_Num))
 
-        ent = self.calc_ent(datasets)  # 整个数据集的 熵
+        H_D = self.calcH_D(trainLabelArr)  # 整个数据集的 熵
 
         max_info_gain = float('-inf')  # 最大信息增益
         max_info_gain_feature = 0  # 取得最大信息增益的特征
 
         for i in feature_set:
 
-            cond_ent = self.calc_cond_ent(datasets, i)  # 选择第i个特征作为划分特征时的条件熵
+            H_D_A = self.calcH_D_A(trainDataArr[:, i], trainLabelArr)  # 选择第i个特征作为划分特征时的条件熵
 
-            current = self.info_gain(ent, cond_ent)
+            current = self.info_gain(H_D, H_D_A)
 
             #         print('g(D,A{})={}'.format(i,current))
 
@@ -125,9 +122,11 @@ class DecisonTree_MathLib:
         return max_info_gain_feature, max_info_gain
 
 
+
 # 树节点
 class Node:
-    def __init__(self, label=None, curr_dataset=None, feature=None, feature_name=None, prev_feature_name=None,prev_feature_value=None, childs=None):
+    def __init__(self, label=None, curr_dataset=None, feature=None, feature_name=None, prev_feature=None,
+                 prev_feature_value=None, childs=None):
         self.label = label  # 叶子节点才有标签
 
         self.curr_dataset = curr_dataset
@@ -135,37 +134,33 @@ class Node:
         self.feature = feature  # 非叶子节点, 划分 子节点的特征
         self.feature_name = feature_name
 
-        self.prev_feature_name=prev_feature_name
+        self.prev_feature = prev_feature
         self.prev_feature_value = prev_feature_value
 
         self.childs = childs
 
 
 # ID3 决策树
-class DecisonTree_ID3(DecisonTree_MathLib):
+class DecisonTree_ID3(DecisonTree_Lib):
     """
     决策树的 ID3 算法
 
     未实现剪枝
-
-    运行速度较慢
-
-    test1:
-    数据集：Mnist
-    训练集数量：6000
-    测试集数量：1000
-    正确率：72.6%
-    运行时长：>10min
-
-    test2:
+    
+    1.使用 numpy 而不是 pandas 
+    2. 计算 经验条件熵 时, 只计算 关注的特征列 和 最后的标签值列 , 减少了计算的数据规模
+    
+    优化训练速度
+        
+    test1: 多分类任务
     数据集：Mnist
     训练集数量：60000
     测试集数量：10000
-    正确率：--
-    运行时长：-- 
-
+    正确率：0.8589
+    运行时长：173s  
+    
     Author: xrh
-    Date: 2021-03-12
+    Date: 2021-03-14
 
     """
 
@@ -174,91 +169,84 @@ class DecisonTree_ID3(DecisonTree_MathLib):
         self.root = root
         self.threshold = threshold  # 信息增益的 阈值
 
-        self.MathLib=DecisonTree_MathLib
-
-    def __pure_dataset(self, datasets):
+    def __pure_dataset(self, trainLabelArr):
         """
         判断 数据集 D 是否纯净
         """
+        dict_labels = Counter(trainLabelArr.flatten())
 
-        label = datasets.columns[-1]  # 最后一列 为标签 Y
+        return len(dict_labels) == 1
 
-        grouped = datasets.groupby(label)
-
-        return len(grouped) == 1
-
-    def __major_class(self, datasets):
+    def major_class(self, trainLabelArr):
         """
         拿到 数据集 D 中数量最多的 标签
+
         """
+        dict_labels = Counter(trainLabelArr.flatten())
 
-        label = datasets.columns[-1]  # 最后一列 为标签 Y
+        max_num = float('-inf')
+        max_num_label = None
 
-        grouped = datasets.groupby(label)
+        for k, v in dict_labels.items():
 
-        max_nums = float('-inf')
-        max_nums_group_name = None
+            if v > max_num:
+                max_num = v
+                max_num_label = k
 
-        for name, group in grouped:
+        return max_num_label
 
-            if group.shape[0] > max_nums:
-                max_nums = group.shape[0]
-                max_nums_group_name = name
+    def __build_tree(self, trainDataArr, trainLabelArr, feature_set, prev_feature=None, prev_feature_value=None):
 
-        return max_nums_group_name
+        T = Node()
 
-    def __build_tree(self, datasets, feature_set, prev_feature_name=None,prev_feature_value=None):
+        T.prev_feature = prev_feature
+        T.prev_feature_value = prev_feature_value
 
-        T = Node(curr_dataset=datasets)
+        if self.__pure_dataset(trainLabelArr) == True:  # 数据集 已经纯净, 无需往下划分, 形成叶子节点
 
-        T.prev_feature_name=prev_feature_name
-        T.prev_feature_value=prev_feature_value
-
-        if self.__pure_dataset(datasets) == True:  # 数据集 已经纯净, 无需往下划分, 形成叶子节点
-
-            T.label = datasets.iloc[0, -1]
+            T.label = trainLabelArr[0]
 
         elif len(feature_set) == 0:  # 所有特征已经用完, 形成叶子节点
 
             # 选取 数据集 中最多的样本标签值作为  叶子节点的标签
-            T.label = self.__major_class(datasets)
+            T.label = self.major_class(trainLabelArr)
 
         else:
 
-            Ag, max_info_gain = self.info_gain_train(datasets,feature_set)
+            Ag, max_info_gain = self.select_max_info_gain(trainDataArr, trainLabelArr, feature_set)
             T.feature = Ag
-            T.feature_name = datasets.columns[Ag]
 
             if max_info_gain < self.threshold:  # 信息增益 小于 阈值
-                T.label = self.__major_class(datasets)
+                T.label = self.major_class(trainLabelArr)
 
             else:
 
-                grouped = datasets.groupby(datasets.columns[Ag])
-
                 T.childs = dict()
 
-                for value, group in grouped:
-                    T.childs[value] = self.__build_tree(group, feature_set - { Ag },prev_feature_name=T.feature_name,
-                                                        prev_feature_value=value)
+                trainDataArr_DevFeature = trainDataArr[:, Ag]
+                A_set = {A_i for A_i in trainDataArr_DevFeature}  # trainDataArr_DevFeature 中的 所有取值
 
-        print('T.feature_name:{}'.format(T.feature_name))
-        print('T.prev_feature_name:{},T.prev_feature_value:{} '.format(T.prev_feature_name,T.prev_feature_value))
+                for A_i in A_set:
+                    T.childs[A_i] = self.__build_tree(trainDataArr[trainDataArr_DevFeature == A_i],
+                                                      trainLabelArr[trainDataArr_DevFeature == A_i], feature_set - {Ag},
+                                                      prev_feature=T.feature,
+                                                      prev_feature_value=A_i)
+
+        print('T.feature:{}'.format(T.feature))
+        print('T.prev_feature:{},T.prev_feature_value:{} '.format(T.prev_feature, T.prev_feature_value))
 
         print('T.childs:{}'.format(T.childs))
         print('T.label:{}'.format(T.label))
-        # print('T.curr_dataset:{}'.format(T.curr_dataset))
 
         print('-----------')
 
         return T
 
-    def fit(self, train_data):
+    def fit(self, trainDataArr, trainLabelArr):
 
-        feature_set = set(range(len(train_data.columns) - 1))  # 特征的总数（最后一列为标签, 不是特征）
+        feature_set = set(range(len(trainDataArr[0])))  #  特征的总数: len(trainDataArr[0])
 
-        self.root = self.__build_tree(train_data, feature_set)
-
+        self.root = self.__build_tree(trainDataArr, trainLabelArr, feature_set)
 
     def __predict(self, row):
         """
@@ -270,16 +258,17 @@ class DecisonTree_ID3(DecisonTree_MathLib):
 
         p = self.root
 
-        while p.label==None: # 到达 叶子节点 退出循环
+        while p.label == None:  # 到达 叶子节点 退出循环
 
-            judge_feature = p.feature # 当前节点划分的 特征
+            judge_feature = p.feature  # 当前节点划分的 特征
             # judge_feature_name= p.feature_name
 
-            p= p.childs[ row[judge_feature] ]
+            p = p.childs[row[judge_feature]]
 
         return p.label
 
-    def predict(self, test_data):
+
+    def predict(self, testDataArr, testLabelArr):
         """
         预测 测试 数据集，返回预测结果 和 正确率
 
@@ -287,17 +276,23 @@ class DecisonTree_ID3(DecisonTree_MathLib):
         :return:
         """
 
-        res_list=[]
+        res_list = []
 
-        for idx,row in test_data.iterrows():
+        for row in testDataArr:
+            res_list.append( self.__predict(row) )
 
-            res_list.append(self.__predict(row))
+        # accuracy = np.mean( np.equal( res_list, testLabelArr ) )  # 快速计算 正确率
 
-        label_list= test_data.iloc[:,-1]
+        err_arr = np.ones( len(res_list), dtype=int)
+        res_arr=np.array(res_list)
+        err_arr[res_arr == testLabelArr] = 0
+        err_rate = np.mean(err_arr)
 
-        accuracy=np.mean(np.equal(res_list,label_list)) # 快速计算 正确率
+        accuracy=1-err_rate
 
         return res_list, accuracy
+
+
 
 class Test:
 
@@ -336,34 +331,37 @@ class Test:
         # 返回数据集和每个维度的名称
         return datasets, labels
 
-    def test_DecisonTree_MathLib(self):
+    def test_DecisonTree_Lib(self):
         """
         DecisonTree_MathLib  测试
 
         :return:
         """
-        # 获取训练集
-        datasets, labels = self.__create_tarin_data()
-        train_data = pd.DataFrame(datasets, columns=labels)
+        # DecisonTree_Lib  测试
 
-        MathLib=DecisonTree_MathLib()
-        print('H(D)= ', MathLib.calc_ent(train_data))
-        print('H(D|A)= ', MathLib.calc_cond_ent(
-            train_data, 0))  # 选择 年龄 作为 划分的特征
+        datasets, label_name = self.__create_tarin_data()
+
+        datasetsArr = np.array(datasets)
+
+        MathLib = DecisonTree_Lib()
+        print('H(D)= ', MathLib.calcH_D(datasetsArr[:, -1]))
+
+        print('H(D|A)= ', MathLib.calcH_D_A(datasetsArr[:, 0], datasetsArr[:, -1]))  # 选择 年龄 作为 划分的特征
 
         print('g(D,A)=', MathLib.info_gain(
-            MathLib.calc_ent(train_data), MathLib.calc_cond_ent(train_data, 0)))
+            MathLib.calcH_D(datasetsArr[:, -1]), MathLib.calcH_D_A(datasetsArr[:, 0], datasetsArr[:, -1])))
 
-        max_info_gain_feature, max_info_gain = MathLib.info_gain_train(
-            train_data)
+        max_info_gain_feature, max_info_gain = MathLib.select_max_info_gain(
+            datasetsArr[:, 0:-1], datasetsArr[:, -1])
 
         print('best feature:{}, max_info_gain:{}'.format(
-            train_data.columns[max_info_gain_feature], max_info_gain))
+            max_info_gain_feature, max_info_gain))
 
 
     def test_small_dataset(self):
         """
-        利用《统计学习方法》 表5.1 中的数据集 测试 决策树ID3
+        
+        利用《统计学习方法》 表 5.1 中的数据集 测试 决策树ID3
 
         :return:
         """
@@ -371,9 +369,7 @@ class Test:
         # 获取训练集
         datasets, labels = self.__create_tarin_data()
 
-        #train_data = pd.DataFrame(datasets, columns=labels)
-        train_data = pd.DataFrame(datasets)
-
+        datasetsArr=np.array(datasets)
         # 开始时间
         start = time.time()
 
@@ -381,7 +377,7 @@ class Test:
         print('start create tree')
 
         ID3 = DecisonTree_ID3(threshold=0.1)
-        ID3.fit(train_data)
+        ID3.fit(datasetsArr[:, 0:-1], datasetsArr[:, -1])
 
         print(' tree complete ')
         # 结束时间
@@ -389,13 +385,13 @@ class Test:
         print('time span:', end - start)
 
         # 测试数据集
-        datasets, labels = self.__create_test_data()
+        datasets_test, labels = self.__create_test_data()
 
-        # test_data = pd.DataFrame(datasets, columns=labels)
+        datasetsArr_test = np.array( datasets_test )
 
-        test_data = pd.DataFrame(datasets)
 
-        print('res:', ID3.predict(test_data))
+        print('res:', ID3.predict(datasetsArr_test[:, 0:-1], datasetsArr_test[:, -1]))
+
 
     def loadData(self,fileName,n=1000):
         '''
@@ -453,18 +449,16 @@ class Test:
 
         print('train data, row num:{} , column num:{} '.format(len(trainDataList),len(trainDataList[0])))
 
-        trainData = pd.DataFrame(trainDataList)
-        trainLabel = pd.DataFrame(trainLabelList, columns=[len(trainDataList[0]) + 1])  # 标签列要加上列名,
-                                                                                        # 否则 columns 默认为0 与 trainData 拼接时, trainData 本身有 columns=0
+        trainDataArr = np.array(trainDataList)
+        trainLabelArr = np.array(trainLabelList)
 
-        trainData = pd.concat([trainData, trainLabel], axis=1)
 
         # 开始时间
         print('start training model....')
         start = time.time()
 
         ID3 = DecisonTree_ID3(threshold=0.1)
-        ID3.fit(trainData)
+        ID3.fit(trainDataArr, trainLabelArr)
 
         # 结束时间
         end = time.time()
@@ -473,25 +467,25 @@ class Test:
         # 获取测试集
         testDataList, testLabelList = self.loadData('../Mnist/mnist_test.csv',n=n_test)
 
-        print('test data, row num:{} , column num:{} '.format(len(trainDataList), len(trainDataList[0])))
+        print('test data, row num:{} , column num:{} '.format(len(testDataList), len(testDataList[0])))
 
-        testData = pd.DataFrame(testDataList)
-        testLabel = pd.DataFrame(testLabelList, columns=[len(trainDataList[0]) + 1])
-
-        testData = pd.concat([testData, testLabel], axis=1)
-
-        print('res:', ID3.predict(testData))
+        testDataArr = np.array(testDataList)
+        testLabelArr = np.array(testLabelList)
 
 
+        print('res:', ID3.predict(testDataArr,testLabelArr))
 
 
 
 if __name__ == '__main__':
 
     test=Test()
+
+    # test.test_DecisonTree_Lib()
+
     # test.test_small_dataset()
 
-    test.test_Mnist_dataset(60000,10000)
+    test.test_Mnist_dataset(6000,1000)
 
 
 
