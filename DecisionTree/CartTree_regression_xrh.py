@@ -796,13 +796,12 @@ class RegresionTree_GBDT():
         return square_loss
 
 
-class RegresionTree_XGBoost():
+class RegresionTree_XGBoost_v1():
     """
 
     CART 回归树
 
-    1.适用于 XGBoost
-
+    1.适用于 XGBoost_v1
 
     Author: xrh
     Date: 2021-05-08
@@ -871,6 +870,8 @@ class RegresionTree_XGBoost():
 
             for A_i in A_set:
                 feature_value_set.add( (i, A_i) )  #
+
+        # 按照 (特征, 特征值) 排序
 
         return feature_value_set
 
@@ -1068,6 +1069,468 @@ class RegresionTree_XGBoost():
         # print('Nums of feature_value_set: {}'.format(len(feature_value_set)))
 
         self.root = self.__build_tree(trainDataArr, gArr, hArr, feature_value_set,prev_max_gain=float('inf') , tree_depth=0) # 根节点树的高度为0
+
+    def __predict(self, row):
+        """
+        预测 一个样本
+
+        :param row:
+        :return:
+        """
+
+        p = self.root
+
+        while p.label == None:  # 到达 叶子节点 退出循环
+
+            judge_feature = p.feature  # 当前节点划分的 特征
+            # judge_feature_name= p.feature_name
+
+            if row[judge_feature] <= p.feature_split:
+                p = p.childs[0]
+            else:
+                p = p.childs[1]
+
+        return p.label
+
+    def predict(self, testDataArr):
+        """
+        推理 测试 数据集，返回预测结果
+
+        :param test_data:
+        :return:
+        """
+
+        res_list = []
+
+        for row in testDataArr:
+            res_list.append(self.__predict(row))
+
+        return np.array(res_list)
+
+    def score(self, testDataArr, testLabelArr):
+        """
+        推理 测试 数据集，返回预测 的 平方误差
+
+        :param test_data:
+        :return:
+        """
+        res_list = self.predict(testDataArr)
+
+        square_loss = np.average(np.square(res_list - testLabelArr))  # 平方误差
+
+        return square_loss
+
+
+class RegresionTree_XGBoost_v2():
+    """
+
+    CART 回归树
+
+    1.适用于 XGBoost_v2
+
+    Author: xrh
+    Date: 2021-05-16
+
+    """
+
+    def __init__(self, root=None,
+                       gama=0,
+                       reg_lambda=1,
+                       max_depth=2,
+                       min_sample_split=2 ,
+
+                       min_child_weight=0,
+                       tree_method='exact',
+                       sketch_eps=0.3,
+
+                       print_log=True):
+
+        """
+
+        :param root: 树的根节点
+        :param gama: 在树的叶节点上进行进一步 划分节点 所需的最小 增益(Gain); 若小于此阈值, 不往下分裂, 形成叶子节点 ; 越大gamma，算法将越保守。
+        :param max_depth: 树的最大深度
+        :param min_sample_split: 划分节点时需要保留的样本数。当某节点的样本数小于某个值时，就当做叶子节点，不允许再分裂。默认是2
+
+        :param min_child_weight: 搜索最佳切分点时, 若 min_child_weight < Min(HL, HR) 则放弃此切分点
+
+        :param tree_method： 指定了构建树的算法，可以为下列的值：
+                            (1)'exact'： 使用 exact greedy 算法分裂节点
+                            (2)'approx'： 使用近似算法分裂节点
+
+        :param sketch_eps： 指定了分桶的步长。其取值范围为 (0,1)， 默认值为 0.3 。
+                            它仅仅用于 tree_medhod='approx'。
+
+        :param print_log: 是否打印日志
+        """
+
+        self.root = root
+
+        self.gama = gama  # 损失的 阈值
+
+        self.reg_lambda=reg_lambda
+
+        self.max_depth = max_depth  # 树的最大深度
+
+        self.min_sample_split=min_sample_split
+
+        self.min_child_weight=min_child_weight
+
+        self.tree_method=tree_method
+
+        self.sketch_eps=sketch_eps
+
+        self.print_log=print_log #是否打印日志
+
+
+
+    def init_Blocks (self,DataArr):
+        """
+
+        Blocks['N']=N # 样本个数
+        Blocks['m'] = N  # 特征个数
+        Blocks['l'] = block_list # 块集合
+
+        :param DataArr: shape:(N,m)
+        :return:
+        """
+
+        block_list=[] # 所有特征的 block
+
+        N,m=np.shape(DataArr) # N 样本个数 ; m 特征 的数量
+
+        for k in range(m):  # 遍历所有的特征
+
+            DataArrFeatureK = DataArr[:, k].reshape(-1, 1)  # 特征 k 单独抽出来 shape:(N,1)
+
+            # index=np.array(range(N),dtype=int).reshape(-1, 1) # 标号 shape:(N,1)
+            index = np.array(range(N)).reshape(-1, 1)  # 标号 shape:(N,1)
+
+            DataArrFeatureK_Index = np.concatenate([DataArrFeatureK,index],axis=1) # 特征 k 与标号拼接,  shape:(N,2)
+
+            DataArrFeatureK_Index_sort = DataArrFeatureK_Index[DataArrFeatureK_Index[:,0].argsort()] # 按照第0列 对行排序
+
+            block_list.append(DataArrFeatureK_Index_sort)
+
+        Blocks={}
+
+        Blocks['N']=N # 样本个数
+        Blocks['m'] = m  # 特征个数
+        Blocks['l'] = block_list # 块集合
+
+        return Blocks
+
+
+    def select_max_gain_split(self,Blocks):
+        """
+
+        Blocks['N']=N # 样本个数
+        Blocks['m'] = N  # 特征个数
+        Blocks['l'] = block_list # 块集合
+
+        block_list=[block_0, block_1,...]  block_0: 特征0 对应的块
+
+        block_i=[(特征值, 样本标号),... ]
+
+        选择 最优的 切分特征 与 切分点
+
+        :param Blocks:
+
+        :return:
+        """
+        Ag = None  # 最佳特征
+        Ag_split = None  # 最佳特征的切分点 , 左子节点为 <=Ag_split , 右子节点为 >Ag_split
+        Ag_split_idx=None # 最佳特征的切分点的块的行标号, 方便之后对块的切分
+
+        max_Gain = float('-inf')
+
+        N=Blocks['N'] # 当前块 拥有的样本个数
+        m= Blocks['m'] # 特征个数
+
+        block_0 = Blocks['l'][0]
+        index = block_0[:,1] # 当前 节点拥有的样本标号,  所有 block 的样本标号应该是相同的
+
+        index = index.astype(int)
+
+        G=np.sum(self.gArr[index])
+        H=np.sum(self.hArr[index])
+
+        H_sum_threshold = 0
+
+        if self.tree_method == 'exact': # exact greedy 算法
+            H_sum_threshold=0.0
+
+        elif self.tree_method == 'approx': # 近似算法
+            H_sum_threshold = self.sketch_eps*H  #  H_sum_threshold : 二阶梯度分桶的阈值
+
+        loss_old = ( G**2 ) /  ( H + self.reg_lambda )  # 切分前的损失
+
+        for i in range(m):  # 遍历 特征, i 即为特征
+
+            # print('searching the {} feature'.format(i))
+
+            block_i=Blocks['l'][i] # TODO:一个特征 对应一个块, 因此可以并行处理所有的块
+            GL=0
+            HL=0
+
+            H_sum=0 # 二阶梯度的累计和, 用于判断是否成为分位点
+
+            for j in range(N): # 扫描 block_i 的每一行 : (特征值, 样本标号)
+                               #TODO: 两重循环的时间复杂度为 O(mN)
+
+                GL += self.gArr[ int(block_i[j][1]) ] # block_i[j][1] 样本标号
+                HL += self.hArr[ int(block_i[j][1]) ] #
+
+                H_sum+=self.hArr[ int(block_i[j][1]) ]
+
+                if  j+1< N and block_i[j][0]!=block_i[j+1][0] and H_sum >= H_sum_threshold:
+                # block_i[j][0]!=block_i[j][0]  这一行和 下一行 的特征值 不同, 才能成为候选分位点
+
+                # H_sum >= H_sum_threshold 达到划分桶 的 阈值 ; 若 H_sum_threshold==0 则每一个特征值都是候选切分点, 相当于 精确贪心算法
+
+                # 分位点 增益的计算
+                    GR = G - GL  # 只算左边, 右边用总和减去左边得到
+                    HR = H - HL
+
+                    if self.min_child_weight < min(HL,HR):
+
+                        loss_new = (GL ** 2) / (HL + self.reg_lambda) + (GR ** 2) / (HR + self.reg_lambda)
+                        gain = loss_new - loss_old
+
+                        if gain >= max_Gain:
+
+                            max_Gain = gain
+                            Ag = i
+                            Ag_split = block_i[j][0] # block_i[j][0] 特征值
+                            Ag_split_idx = j
+
+                        # 累计和清零
+                        H_sum=0
+
+        if Ag is None or max_Gain <= self.gama: # 未找到 最佳切分点
+        # Ag is None 未找到 最佳切分点
+        #    max_Gain <= self.gama 考虑 切分的最大的增益是否比 γ(gama) 大，如果小于γ则不进行分裂（预剪枝）
+
+            split_bool=False  #
+
+        else:
+            split_bool=True
+
+        return split_bool,Ag, Ag_split,Ag_split_idx, max_Gain
+
+
+    def split_sync_Blocks(self,Blocks,Ag,Ag_split_idx):
+        """
+        切分并同步块
+
+        (1)切分 最佳特征Ag 对应的块
+        (2)将切分后的 样本标号信息 同步到其他的块, 并切分其他块
+        (3)生成 左右 两个子 Blocks
+
+        :param Blocks:
+        :param Ag:
+        :param Ag_split_idx:
+        :return:
+        """
+        block_list= Blocks['l']
+        block_Ag = block_list[Ag]
+
+        # 1. 切分最佳特征Ag 对应的块
+        block_Ag_left= block_Ag[:Ag_split_idx+1 , :]
+
+        # TODO: 边界情况处理(solved)
+        block_Ag_right = block_Ag[Ag_split_idx+1:, :] # Ag_split_idx+1 越界不会报错
+
+        index_left=block_Ag_left[:, 1] # 左子块的 样本标号
+        index_right = block_Ag_right[:, 1] # 右子块的 样本标号
+
+        # 2.将切分后的 样本标号信息 同步到其他的块, 并切分其他块
+        block_list_left=[]
+        block_list_right = []
+
+        N,m=Blocks['N'], Blocks['m'] # N 样本个数 ; m 特征 的数量
+
+        for k in range(m):  # 遍历所有的特征
+
+            # print("update the {} feature".format(k))
+
+            if k == Ag:
+                block_list_left.append(block_Ag_left)
+                block_list_right.append(block_Ag_right)
+
+            else:
+                block_k=block_list[k]
+
+                block_k_left=[]
+                block_k_right=[]
+
+                set_index_left=set(index_left)
+
+                for row in block_k: # 顺序遍历块中所有行 row:(特征值, 样本标号)
+                                    # TODO: 两重 循环 时间复杂度为 O(mN)
+
+                    if row[1] in set_index_left:
+                        block_k_left.append(row)
+
+                    else:
+                        block_k_right.append(row)
+
+                # TODO：以下代码 时间复杂度过高 (solved)
+                # condition_left = np.array([True if sample_id in set(index_left) else False for sample_id in block_k[:, 1]])
+                # condition_right = ~condition_left
+                # block_k_left= block_k[ condition_left , : ]
+                # block_k_right = block_k[ condition_right , :]
+
+                block_list_left.append(np.array(block_k_left))
+                block_list_right.append(np.array(block_k_right))
+
+        # 3. 生成 左右 两个子 Blocks
+        BlocksL={}
+        BlocksL['N']=len(index_left) # 样本个数
+        BlocksL['m'] = m  # 特征个数
+        BlocksL['l'] = block_list_left # 块集合
+
+        BlocksR={}
+        BlocksR['N']=len(index_right) # 样本个数
+        BlocksR['m'] = m  # 特征个数
+        BlocksR['l'] = block_list_right # 块集合
+
+        return  BlocksL,BlocksR
+
+    def update_leaf_region_lable(self, gArr,hArr):
+        """
+        更新 叶子节点的 预测值
+
+        (1) 需要考虑 会触发 X/0= Nan 的bug
+
+        :param gArr: 损失函数 对 F 的一阶梯度
+        :param hArr: 损失函数 对 F 的 二阶梯度
+        :return:
+        """
+
+        numerator = np.sum( gArr )
+
+        if numerator == 0:
+            return 0.0
+
+        denominator = np.sum( hArr ) + self.reg_lambda
+
+        if abs(denominator) < 1e-150:
+            return 0.0
+        else:
+            return - numerator / denominator
+
+
+
+    def __build_tree(self,
+                       Blocks,
+                       tree_depth,
+                       prev_feature=None,
+                       prev_feature_split=None,
+                       father_label=None):
+        """
+        递归 构建树
+
+        递归结束条件：
+
+        (1)当前结点包含的样本集合为空，不能划分：将类别设定为父节点的类别。
+
+        :param block_list:
+        :param tree_depth:
+        :param prev_feature:
+        :param prev_feature_split:
+        :param father_label:
+        :return:
+        """
+
+        T = Node()
+
+        T.prev_feature = prev_feature
+        T.prev_feature_split = prev_feature_split
+
+        if Blocks['N'] == 0 :
+        # Blocks['N'] == 0 划分后 数据集已经为空
+
+            T.label = father_label  # 剪枝, 使用 上一个 节点给它的标签值
+
+        else:
+
+            # T.loss = None
+
+            T.sample_N = Blocks['N']
+
+            block_0 = Blocks['l'][0]
+            index = block_0[:, 1]  # 当前 节点拥有的样本标号,  所有 block 的样本号集合 是相同的
+
+            index = index.astype(int)
+
+            leaf_label = self.update_leaf_region_lable(self.gArr[index] , self.hArr[index] ) # 对于叶子节点区域 ，计算出最佳拟合值
+
+            if Blocks['N'] <= self.min_sample_split \
+                    or tree_depth >= self.max_depth :
+
+            #   Blocks['N'] <= self.min_sample_split 划分节点时需要保留的样本数。当某节点的样本数小于某个值时，就当做叶子节点，不允许再分裂
+            #  tree_depth >= self.max_depth 树的深度达到最大深度 ,
+
+                T.label = leaf_label #  叶子节点的标签
+
+            else:
+
+                split_bool,Ag, Ag_split,Ag_split_idx, max_gain = self.select_max_gain_split(Blocks)
+
+                if split_bool:
+
+                    print('Ag:{} , Ag_split:{}, max_gain:{}'.format(Ag,Ag_split,max_gain))
+
+                    T.feature = Ag
+                    T.feature_split = Ag_split
+
+                    T.childs = dict()
+
+                    BlocksL,BlocksR = self.split_sync_Blocks(Blocks,Ag,Ag_split_idx)
+
+                    # CART 树为二叉树
+                    # 左节点为  <=  特征值的 分支
+                    T.childs[0] = self.__build_tree( BlocksL,
+                                                    tree_depth + 1,
+                                                    prev_feature=T.feature,
+                                                    prev_feature_split='<=' + str(Ag_split), father_label=leaf_label)
+
+                    # 右节点为 > 切分特征值的 分支
+                    T.childs[1] = self.__build_tree(BlocksR,
+                                                    tree_depth + 1,
+                                                    prev_feature=T.feature,
+                                                    prev_feature_split='>' + str(Ag_split), father_label=leaf_label)
+
+                else: # 未找到合适的 切分点
+                    T.label = leaf_label  # 叶子节点的标签
+
+        if self.print_log: #
+
+            print('T.feature:{},T.feature_split:{}, T.loss:{} , T.sample_N:{}  '.format(T.feature,T.feature_split, T.loss,T.sample_N))
+            print('T.prev_feature:{},T.prev_feature_split:{} '.format(T.prev_feature, T.prev_feature_split))
+            print('depth:{} '.format(tree_depth))
+            # print('T.childs:{}'.format(T.childs))
+            print('T.label:{}'.format(T.label))
+            print('-----------')
+
+        return T
+
+    def fit(self, trainDataArr, gArr, hArr ):
+        """
+
+        :param trainDataArr:  特征 X
+        :param gArr: 每一个样本的 损失函数 对 F 的一阶梯度
+        :param hArr: 每一个样本的  损失函数 对 F 的 二阶梯度
+        :return:
+        """
+
+        self.gArr=gArr
+        self.hArr=hArr
+
+        Blocks= self.init_Blocks(trainDataArr)
+
+        self.root = self.__build_tree( Blocks , tree_depth=0) # 根节点树的高度为0
 
     def __predict(self, row):
         """
