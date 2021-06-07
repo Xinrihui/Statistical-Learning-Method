@@ -14,4 +14,9 @@
 
 实现了 xgboost 的简化版本, 参考了 xgboost 源码 中一些数值计算的方法, 感觉自己离写出完整的xgboost 功力尚不足, 努力向陈天奇看齐吧
 
+
+代码中使用的数据集下载指南：
+1.Mnist数据集 来自 https://github.com/Dod-o/Statistical-Learning-Method_Code/tree/master/Mnist 下载后进行解压,
+然后使用 transMnist 中的代码转换为 csv 的格式
+
 各个文件夹中, ref 子目录为 参考的代码, 就不在这里引用了~

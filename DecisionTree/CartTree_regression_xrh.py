@@ -1128,6 +1128,8 @@ class RegresionTree_XGBoost_v2():
 
     1.适用于 XGBoost_v2
 
+    2.采用 基于递归的 深度优先 建树
+
     Author: xrh
     Date: 2021-05-16
 

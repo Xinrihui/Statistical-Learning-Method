@@ -14,9 +14,7 @@ from sklearn import ensemble
 
 from scipy.special import expit, logsumexp
 
-
-from CartTree_regression_xrh import *
-
+from updater_colmaker import  *
 
 from sklearn.metrics import accuracy_score
 
@@ -33,53 +31,79 @@ from sklearn.metrics import roc_curve
 
 from sklearn.metrics import auc
 
-class XGBoost_v2:
+
+
+class DMatrix:
+
+    def __init__(self,DataArr,missing=np.nan):
+        """
+
+        :param DataArr: 样本数据的特征列, 不包含标签
+        :param missing: 代表缺失数据的值
+        """
+
+        # N: 样本个数 ; m 特征的总数
+        self.N,self.m = np.shape(DataArr)
+
+        # RowIndex 样本的行索引
+        self.RowIndex=list(range(self.N))
+
+        # 样本 行
+        self.RowData=DataArr
+
+        # 出现过特征缺失值的行
+        self.MissingValueRow=set()
+
+        # 所有特征对应的块集合
+        self.SortedPages=[]
+
+        for k in range(self.m):  # 遍历所有的特征
+
+            DataFeatureK = DataArr[:, k]  # 特征 k 拎出来 shape:(N,)
+            FeatureK_Index=[]
+
+            for ridx in range(self.N):
+                if DataFeatureK[ridx]!=missing:
+                    FeatureK_Index.append( (DataFeatureK[ridx],ridx) ) # (特征值, 样本号)
+                else:
+                    self.MissingValueRow.add(ridx)
+
+            # 按照特征值的大小排序
+            SortedFeatureK_Index=sorted(FeatureK_Index ,key=lambda t: t[0])
+
+            self.SortedPages.append(SortedFeatureK_Index)
+
+
+
+class XGBoost:
     """
 
-    实现 XGBoost , 功能包括:
+    python 重写 XGBoost , 功能包括:
 
-    1. 回归 ( 使用平方损失函数)
-    2. 二分类 ( 使用 交叉熵损失函数)
+    1. 回归 ( 使用平方损失函数 )
+    2. 二分类 ( 使用 交叉熵损失函数 )
     3. 多分类 ( 使用 对数损失函数 )
 
-    ref: https://blog.csdn.net/anshuai_aw1/article/details/82970489
-         https://blog.csdn.net/anshuai_aw1/article/details/83025168
-         https://blog.csdn.net/anshuai_aw1/article/details/85093106
+    ref:
+    https://github.com/dmlc/xgboost/
 
     实现细节：
     (1) 使用 完全贪心算法 和 近似算法 划分子节点;
 
-        近似算法(分块有序+局部策略)：
-
-        1.依据特征将数据划分为不同的块, 一个特征一个块, 块内根据特征值排序, 并记录特征值对应的样本数据的指针;
-        2.划分子节点时, 对每一个块 利用样本二阶梯度的值求和 得到 候选分位点, 同时根据增益找到最佳的分位点(切分点) ,
-          即(最佳切分特征,最佳切分特征值), 因为有序, 所以只需进行一次线性扫描就足以枚举所有的分裂点。;
-        3.使用  (最佳切分特征,最佳切分特征值) 对当前节点拥有的数据进行切分,生成左右子节点, 除了 最佳切分特征 对应的块, 其他的块也要进行切分, 因为原块是依据特征值有序的, 所以切分后的块也是有序的
-        4.因为 块内的数据 一直保持 依据特征值有序, 因此只需要在初始化进行一次依据特征值的排序, 后面无需再排序, 降低了时间复杂度;
-
-        5.由于采用局部策略, 每次找 最优切分点 和 切分并同步块 时, 都要 遍历所有的块(m) 和 块中的所有样本(N) ,时间复杂度为 O(mN)
-
-        6.论文中指出 两种 划分候选切分点的策略, 一种是全局策略，即在初始化tree的时候划分好候选分割点，并且在树的每一层都使用这些候选分割点；
-        另一种是局部策略，即每一次划分的时候都重新计算候选分割点。
-        这两者各有利弊，全局算法不需要多次计算候选节点，但需要一次获取较多的候选节点供后续树生长使用，而局部算法一次获取的候选节点较少，
-        可以在分支过程中不断改善，即适用于生长更深的树，两者在effect和accuracy做trade off。
-
-        7.此版本的 xgboost 中, 我们没有实现 全局策略, 因为每一次划分块后, 子块中的特征值列表对比原块肯定发生变化,
-        因此原块中的候选分位点在子块中会失效, 此处有疑问需要参阅 xgboost 源码
-
         完全贪心算法(分块有序):
 
-        1.依据特征将数据划分为不同的块, 一个特征一个块, 块内根据特征值排序, 并记录特征值对应的样本数据的指针;
-        2.划分子节点时, 对每一个特征(每一个块)的每一特征值都作为 候选切分点(<= 特质值 为左子节点 , > 特质值为右子节点), 依据增益找到最优的切分点
+
+        近似算法(分块有序+局部策略)：
+
 
     (2)  获取分位点时, 需要 将所有值读入内存并排序 ;
         当内存不够时, 无法做到 对所有特征值排序, 此时可采用 分位点估计算法即 加权分位数速写-Weighted Quantile Sketch, 来估算出分位点的值 (未实现)
 
     (3)  稀疏感知划分节点（Sparsity-aware Split Finding）
-         (未实现)
+         
 
     Author: xrh
-    Date: 2021-05-16
+    Date: 2021-05-29
 
     test1: 回归任务
     数据集：boston房价数据集
@@ -379,6 +403,8 @@ class XGBoost_v2:
 
         N = np.shape(X)[0]  # 样本的个数
 
+        X_DMatrix=DMatrix(X)
+
         if self.objective == "multi:softmax": # 多分类
 
             F_0 =  np.array([self.base_score]*self.num_class)  # shape : (K,)
@@ -389,10 +415,8 @@ class XGBoost_v2:
 
             y_predict = self.init_y_predict(F_0,N) #  shape : (K, N)
 
-            # feature_value_set = RegresionTree_XGBoost.get_feature_value_set(X)  # 可供选择的特征集合 , 包括 (特征, 切分值)
-
             y_one_hot = (y == np.array(range(self.num_class)).reshape(-1, 1)).astype(
-                np.int8)  # 将 向量yd 扩展为 one-hot , shape: (K,N)
+                np.int8)  # 将 向量y 扩展为 one-hot , shape: (K,N)
 
             for m in range(1, self.max_iter):  # 进行 第 m 轮迭代
 
@@ -405,7 +429,7 @@ class XGBoost_v2:
                     g,h= self.cal_g_h(y_one_hot[k],y_predict[k]) # y_predict[k]  shape:(N,)
 
                     # 训练 用于 2分类的 回归树
-                    RT = RegresionTree_XGBoost_v2(gama=self.gama,
+                    RT = Builder(gama=self.gama,
                                                   reg_lambda=self.reg_lambda,
                                                   max_depth=self.max_depth,
                                                   min_child_weight=self.min_child_weight,
@@ -413,7 +437,7 @@ class XGBoost_v2:
                                                   sketch_eps=self.sketch_eps,
                                                   print_log=self.print_log)
 
-                    RT.fit(X, g, h)
+                    RT.Update(X_DMatrix, g, h)
 
                     f_m =  RT.predict(X)
 
@@ -449,13 +473,12 @@ class XGBoost_v2:
 
             y_predict= self.init_y_predict(F_0,N)
 
-            # feature_value_set = RegresionTree_XGBoost.get_feature_value_set(X)  # 可供选择的特征集合 , 包括 (特征, 切分值)
 
             for m in range(self.max_iter):  # 进行 第 m 轮迭代
 
                 g,h = self.cal_g_h( y,y_predict )
 
-                RT = RegresionTree_XGBoost_v2(gama=self.gama,
+                RT = Builder(gama=self.gama,
                                               reg_lambda=self.reg_lambda,
                                               max_depth=self.max_depth,
                                               min_child_weight=self.min_child_weight,
@@ -463,7 +486,7 @@ class XGBoost_v2:
                                               sketch_eps=self.sketch_eps,
                                               print_log=self.print_log)
 
-                RT.fit( X, g, h )
+                RT.Update( X_DMatrix, g, h )
 
                 f_m =  RT.predict(X) # 第 m 颗树
 
@@ -592,7 +615,7 @@ class Test:
         # 创建决策树
         print('start create model')
 
-        clf = XGBoost_v2( error_rate_threshold=0.01,objective='reg:squarederror', max_iter=5, max_depth=3,gama=0.0,reg_lambda=0.0 )
+        clf = XGBoost( error_rate_threshold=0.01,objective='reg:squarederror', max_iter=5, max_depth=3,gama=0.0,reg_lambda=0.0 )
         clf.fit( X, y,learning_rate=0.1 )
 
         print(' model complete ')
@@ -631,7 +654,7 @@ class Test:
         start = time.time()
         print('start create model')
 
-        clf = XGBoost_v2( error_rate_threshold=0.1,
+        clf = XGBoost( error_rate_threshold=0.1,
                           objective='reg:squarederror',
                           max_iter=40,
                           max_depth=3,
@@ -684,7 +707,7 @@ class Test:
         X = dataset[:, 0:2]
         y = dataset[:, 2]
 
-        clf = XGBoost_v2(error_rate_threshold=0.0, max_iter=2, max_depth=3,objective="binary:logistic")
+        clf = XGBoost(error_rate_threshold=0.0, max_iter=2, max_depth=3,objective="binary:logistic")
         clf.fit(X, y, learning_rate=0.1)
 
         X_test = np.array(
@@ -772,7 +795,7 @@ class Test:
         start = time.time()
 
 
-        clf = XGBoost_v2( error_rate_threshold=0.01,
+        clf = XGBoost( error_rate_threshold=0.01,
                           objective='binary:logistic',
                           max_iter=30,
                           max_depth=3,
@@ -938,7 +961,7 @@ class Test:
 
         start= time.time()
 
-        clf = XGBoost_v2( error_rate_threshold=0.01,
+        clf = XGBoost( error_rate_threshold=0.01,
                           objective='binary:logistic',
                           max_iter=30,
                           max_depth=3,
@@ -985,7 +1008,7 @@ class Test:
 
         y_train = np.array([[0], [0], [0], [0], [0], [1], [1], [1], [1], [1], [2], [2], [2], [2]]).ravel()
 
-        clf = XGBoost_v2( error_rate_threshold=0.01,objective="multi:softmax" ,num_class=3,max_iter=5, max_depth=1 , print_log=True)
+        clf = XGBoost( error_rate_threshold=0.01,objective="multi:softmax" ,num_class=3,max_iter=5, max_depth=1 , print_log=True)
         clf.fit(X_train, y_train,learning_rate=1)
 
 
@@ -1055,7 +1078,7 @@ class Test:
         print('start training model....')
         start = time.time()
 
-        clf = XGBoost_v2( error_rate_threshold=0.01,objective="multi:softmax" ,num_class=10 ,max_iter=20, max_depth=3 )
+        clf = XGBoost( error_rate_threshold=0.01,objective="multi:softmax" ,num_class=10 ,max_iter=20, max_depth=3 )
         clf.fit(trainDataArr, trainLabelArr,learning_rate=0.5)
 
 
@@ -1081,7 +1104,7 @@ class Test:
         # 将数据集一分为二，训练数据占80%，测试数据占20%
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2 , random_state=188)
 
-        clf = XGBoost_v2( error_rate_threshold=0.01,objective="multi:softmax" ,num_class=3 ,max_iter=3, max_depth=2, print_log=True)
+        clf = XGBoost( error_rate_threshold=0.01,objective="multi:softmax" ,num_class=3 ,max_iter=3, max_depth=2, print_log=True)
         clf.fit(X_train, y_train,learning_rate=0.5)
 
         print('test dataset accuracy: {} '.format( clf.score(X_test, y_test) ))
