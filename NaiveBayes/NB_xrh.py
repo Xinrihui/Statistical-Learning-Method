@@ -15,13 +15,12 @@ from sklearn.model_selection import train_test_split
 infinite = -(2 ** 31)
 
 
-
 class NaiveBayesClassifier:
     """
     朴素贝叶斯分类器
 
-    1.适用于 类别型特征
-    2.适用于 数值型特征
+    1.适用于 类别型特征 和 数值型特征的训练数据；
+      对于类别型特征, 无需进行编码, 比较方便
 
     ref:
     统计学习方法 第二版》李航
@@ -34,7 +33,7 @@ class NaiveBayesClassifier:
     训练集数量：60000
     测试集数量：10000
     正确率： 0.84
-    运行时长：330s
+    训练时长：63s
 
     """
 
@@ -66,19 +65,20 @@ class NaiveBayesClassifier:
 
         N,m = np.shape(X) # N : 样本个数 ; m 特征维度
 
-        P_Y={} #公式(4.11)
+        P_Y={} # 公式(4.11)
 
         z = np.log(N + self.K*self.Lambda) # 公式(4.11) 分母
         for y_k, y_v in dict_labels.items(): # 遍历所有的标签值
 
             P_Y[y_k] = np.log(y_v + self.Lambda) - z # 公式(4.11); 概率值对数化
 
-        P_X_Y={} #公式(4.10)
+        P_X_Y={} # 公式(4.10)
 
         for i in range(m): # 遍历所有的特征
 
             Xi = X[:, i] # 特征 Xi
-            dict_Xi={}
+
+            dict_Xi=defaultdict(dict)
 
             P_X_Y[i]=dict_Xi
 
@@ -87,21 +87,29 @@ class NaiveBayesClassifier:
             Si=len(set_X_i) # 特征 i 的特征值的个数
             # Si=2
 
-            for i_k in set_X_i: # 遍历特征i的所有特征值 i_k
+            for rid in range(N): #遍历所有的样本进行统计
 
-                dict_Xi_ik = {}
-                dict_Xi[i_k] = dict_Xi_ik
+                if y[rid] in dict_Xi[Xi[rid]]: #
+                    dict_Xi[ Xi[rid] ][ y[rid] ]+=1 # 公式(4.10) 分子
+
+                else:#
+                    dict_Xi[Xi[rid]][y[rid]]=1 # 第一次遇到计数为1
+
+            for i_k in set_X_i: # 遍历特征i的所有特征值 i_k
 
                 for y_k, y_v in dict_labels.items(): # 遍历所有的标签值
 
                     z= np.log(y_v + Si*self.Lambda) # 公式(4.10) 分母
 
-                    cnt=0
-                    for rid in range(N):
-                        if Xi[rid]==i_k and y[rid]==y_k:
-                            cnt+=1
+                    # try:
+                    if y_k in dict_Xi[i_k]:
+                        dict_Xi[i_k][y_k] = np.log( dict_Xi[i_k][y_k] + self.Lambda ) - z #公式(4.10)
+                    else: # 标签值y_k 不在 dict_Xi[i_k] 中
+                        dict_Xi[i_k][y_k] = np.log(0 + self.Lambda) - z  #
 
-                    dict_Xi_ik[y_k] = np.log( cnt + self.Lambda ) - z #公式(4.10)
+                    # except Exception as err:
+                    #     print(err)  # debug 时 , 在此处打断点
+
 
         # 训练完成 更新参数
         self.P_Y= P_Y
@@ -122,17 +130,17 @@ class NaiveBayesClassifier:
 
         for y_k, prob_y in self.P_Y.items():  # 遍历所有的标签值
 
-            s=0
+            sum_logprob=0
             for i in range(self.m):  # 遍历所有的特征
 
                 if row[i] in self.P_X_Y[i] : # 特征i 的特征值 row[i] 在训练集中不一定有
-                    p=self.P_X_Y[i][row[i]][y_k]
+                    logprob=self.P_X_Y[i][row[i]][y_k]
                 else:
-                    p= infinite # 概率为 P=0 取对数后为 (-无穷)
+                    logprob= infinite # 概率为 P=0 取对数后为 (-无穷)
 
-                s+=p
+                sum_logprob+=logprob #  公式 4.7 中为概率连续相乘,因为我们对概率取了对数,因此转换为连续相加
 
-            log_prob = prob_y + s
+            log_prob = prob_y + sum_logprob # (公式 4.7)
 
             if  log_prob >= max_label_prob:
                 max_label_prob=log_prob
@@ -264,7 +272,7 @@ class Test:
 if __name__ == '__main__':
     test = Test()
 
-    # test.test_Mnist_dataset(600,100)
+    # test.test_Mnist_dataset(60000,10000)
 
     test.test_iris_dataset()
 
