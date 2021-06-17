@@ -6,16 +6,22 @@
 
 2.提升算法： AdaBoost 回归, AdaBoost 二分类, AdaBoost 多分类(SAMME); GBDT 回归, GBDT 二分类, GBDT 多分类
 
-全部代码采用 numpy 库实现，并且 和 sklearn 中的相关模型进行 性能对比, 发现 sklearn 中的树是真的快....
+全部代码仅使用 numpy 库实现，并且和 sklearn 中的相关模型进行性能对比, 发现 sklearn 中的构建CART树是真的快....
 
 第二阶段
 
 3.提升算法: xgboost 回归, xgboost 二分类, xgboost 多分类
 
-实现了 xgboost 的简化版本, 参考了 xgboost 源码 中一些数值计算的方法, 感觉自己离写出完整的xgboost 功力尚不足, 努力向陈天奇看齐吧
+实现了 xgboost 的单线程版本( 递归建立CART树 ), 感觉自己离写出完整的xgboost 功力尚不足, 努力向陈天奇看齐吧
+
+第三阶段
+
+4.概率图模型: 朴素贝叶斯, 高斯混合模型, HMM , CRF
+
 
 
 代码中使用的数据集下载指南：
+
 1.Mnist数据集 来自 https://github.com/Dod-o/Statistical-Learning-Method_Code/tree/master/Mnist 下载后进行解压,
 然后使用 transMnist 中的代码转换为 csv 的格式
 
