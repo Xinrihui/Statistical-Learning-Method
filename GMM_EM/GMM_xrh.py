@@ -186,7 +186,7 @@ class GMM_1D:
 
         return alpha_arr
 
-    def init_parameter (self,mode=0):
+    def init_parameter(self,mode=0):
         """
         初始化 GMM 的参数
 
@@ -199,7 +199,7 @@ class GMM_1D:
             sigma_arr = np.array([1, 1])
             alpha_arr = np.array([0.5, 0.5])
 
-        else: # 使用随机参数(效果不佳)
+        else: # 使用随机参数(效果不佳), 说明 EM 算法不一定能收敛到全局最优点
 
             # K 个高斯分布的均值
             mu_arr = np.random.rand(self.K) # 生成[0.0, 1.0)之间的随机浮点数数组,数组长度为K
@@ -254,8 +254,8 @@ class Test:
         # 设置两个高斯模型进行混合，这里是初始化两个模型各自的参数
         # 见“9.3 EM算法在高斯混合模型学习中的应用”
         # alpha是“9.3.1 高斯混合模型” 定义9.2中的系数α
-        # mu0是均值μ
-        # sigmod是方差σ
+        # mu是均值μ
+        # sigma是方差σ
         # 在设置上两个alpha的和必须为1，其他没有什么具体要求，符合高斯定义就可以
         alpha = [0.3, 0.7]
         mu = [-2,0.5]
@@ -283,9 +283,10 @@ class Test:
         print('alpha: {} , mu: {}, sigma:{} '.format(
             alpha_arr, mu_arr, sigma_arr ))
 
-        # 两个高斯分布的参数: alpha = [0.3, 0.7] mu = [-2,0.5] sigma = [0.5,1]
-        # the Parameters predict is:
+        # 实际两个高斯分布的参数: alpha = [0.3, 0.7] mu = [-2,0.5] sigma = [0.5,1]
+        # 我们估计出的 两个高斯分布的参数:
         # alpha: [0.28674728 0.71325272] , mu: [-2.02549866  0.39455874], sigma:[0.47218494 0.9937545 ]
+        # 效果还可以~
 
         end = time.time()
 
