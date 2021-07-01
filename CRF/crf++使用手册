@@ -1,0 +1,105 @@
+
+1.训练数据准备
+
+运行 make_crf_trainset.py 将已经分词的文本 转换为下面的格式:
+
+迈	B
+向	E
+充	B
+满	E
+
+2.在当前目录下运行:
+
+lib/CRF++-0.58/crf_learn -c 2 -m 100 template ../dataset/ChineseCutWord/msra_training.utf8.2col lib/model/msramodel -t
+(使用 MSRA数据集)
+
+或者
+
+lib/CRF++-0.58/crf_learn -c 2 -m 100 template ../dataset/ChineseCutWord/pku_training.2col lib/model/pku_model -t
+(使用 PKU数据集)
+
+3. CRF++ 的参数说明
+
+3.1 CRF++的训练命令一般格式如下：
+
+crf_learn  -f 3 -c 4.0 template train.data model -t
+其中，template为模板文件，train.data为训练语料，-t表示可以得到一个model文件和一个model.txt文件，其他可选参数说明如下：
+
+-f, –freq=INT 使用属性的出现次数不少于INT(默认为1)
+
+-m, –maxiter=INT 设置INT为LBFGS的最大迭代次数 (默认10k)
+
+-c, –cost=FLOAT  设置FLOAT为代价参数，过大会过度拟合 (默认1.0)
+
+-e, –eta=FLOAT设置终止标准FLOAT(默认0.0001)
+
+-C, –convert将文本模式转为二进制模式
+
+-t, –textmodel为调试建立文本模型文件
+
+-a, –algorithm=(CRF|MIRA)    选择训练算法，默认为CRF-L2
+
+-p, –thread=INT线程数(默认1)，利用多个CPU减少训练时间
+
+-H, –shrinking-size=INT    设置INT为最适宜的跌代变量次数 (默认20)
+
+-v, –version显示版本号并退出
+
+-h, –help显示帮助并退出
+在训练过程中，会输出一些信息，其意义如下：
+
+iter：迭代次数。当迭代次数达到maxiter时，迭代终止
+
+terr：标记错误率
+
+serr：句子错误率
+
+obj：当前对象的值。当这个值收敛到一个确定值的时候，训练完成
+
+diff：与上一个对象值之间的相对差。当此值低于eta时，训练完成
+
+3.2 模板文件 (template) 的解释
+
+在特征模板文件中，每一行(如U00:%x[-2,0]）代表一个特征，而宏“%x[行位置,列位置]”则代表了相对于当前指向的token的行偏移和列的绝对位置，以上述训练集为例，如果当前扫描到“新 k I”这一行，
+
+毎 k B
+日 k I
+新 k I <== 扫描到这一行，代表当前位置
+聞 k I
+社 k I
+特 k B
+別 k I
+顧 k B
+問 k I
+４ n B
+
+那么依据特征模板文件抽取的特征如下：
+
+# Unigram
+U00:%x[-2,0] ==> 毎
+U01:%x[-1,0] ==> 日
+U02:%x[0,0] ==> 新
+U03:%x[1,0] ==> 聞
+U04:%x[2,0] ==> 社
+U05:%x[-2,0]/%x[-1,0]/%x[0,0] ==> 每/日/新
+U06:%x[-1,0]/%x[0,0]/%x[1,0] ==> 日/新/聞
+U07:%x[0,0]/%x[1,0]/%x[2,0] ==> 新/聞/社
+U08:%x[-1,0]/%x[0,0] ==> 日/新
+U09:%x[0,0]/%x[1,0] ==> 新/聞
+
+# Bigram
+B
+
+CRF++里将特征分成两种类型，一种是Unigram的，“U”起头，另外一种是Bigram的，“B”起头。
+对于Unigram的特征，假如一个特征模板是"U01:%x[-1,0]", CRF++会自动的生成一组特征函数(func1 ... funcN) 集合:
+
+func1 = if (output = B and feature="U01:日") return 1 else return 0
+func2 = if (output = I and feature="U01:日") return 1 else return 0
+....
+funcXX = if (output = B and feature="U01:問") return 1 else return 0
+funcXY = if (output = I and feature="U01:問") return 1 else return 0
+
+生成的特征函数的数目 = (L * N)，其中L是输出的类型的个数，这里是B，I这两个tag，N是通过模板扩展出来的所有单个字符串(特征）的个数，这里指的是在扫描所有训练集的过程中找到的日文字（特征）。
+
+
+

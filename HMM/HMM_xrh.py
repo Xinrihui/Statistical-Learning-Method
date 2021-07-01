@@ -551,7 +551,7 @@ class HMMSegment:
         state = np.argmax(pre_dp)
         label.append(self.rev_statuDict[state])
 
-        # 时刻 T,T-1,...,1
+        # 时刻  T-1,...,1
         for t in range(len(sentence) - 1, 0, -1):
             state = pre_state[t][state]
             label.append(self.rev_statuDict[state])
