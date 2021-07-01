@@ -101,5 +101,7 @@ funcXY = if (output = I and feature="U01:問") return 1 else return 0
 
 生成的特征函数的数目 = (L * N)，其中L是输出的类型的个数，这里是B，I这两个tag，N是通过模板扩展出来的所有单个字符串(特征）的个数，这里指的是在扫描所有训练集的过程中找到的日文字（特征）。
 
+ref:
+https://www.cnblogs.com/jclian91/p/10795413.html
 
 
