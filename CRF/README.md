@@ -1,7 +1,7 @@
 
 # 线性链条件随机场
 
-# 模型的设计与实现
+## 1.模型的设计与实现
 
     1. 适用于中文分词任务, 参考 CRF++ 的模板, 设计如下特征函数:
 
@@ -81,7 +81,7 @@
     5.如果觉得 LinearCRF模型训练的慢, 可以读取 CRF++ 库训练得到的参数, 详见 类 CRFSegmentation
 
 
-# 2.实验结果
+## 2.实验结果
 
 (1)  使用 CRF++ 库 在PKU 数据集 训练 100轮, 并在微博的测试集上测试
 
@@ -98,7 +98,10 @@
 
 
 
-ref:
+#ref
+
 1.《统计学习方法 第二版》李航
+
 2. https://victorjiangxin.github.io/Chinese-Word-Segmentation/
+
 3. https://www.cnblogs.com/Determined22/p/6915730.html
