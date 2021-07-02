@@ -28,18 +28,21 @@ class LinearCRF(object):
     (2) 转移特征, 二元特征(Bigram)
     ('B', pre_tag, tag)
 
-    2.实现了如下学习算法:
+    2.实现了学习算法:
       (1)带正则的梯度上升算法
       (2) 拟牛顿法 L-BGFS ( 调用 scipy.optimize)
 
-    3.实现在已有的预训练的模型的基础上进行更多的训练 (待完成)
+    3.实现在已有的预训练的模型的基础上进行更进一步的训练(使用同一个数据集)
 
     4.实现了 基于维特比算法的 解码
+
+    5.如果觉得 LinearCRF模型训练的慢, 可以读取 CRF++ 库训练得到的参数, 详见 类 CRFSegmentation
 
 
     ref:
     1.《统计学习方法 第二版》李航
     2. https://victorjiangxin.github.io/Chinese-Word-Segmentation/
+    3. https://www.cnblogs.com/Determined22/p/6915730.html
 
     Author: xrh
     Date: 2021-06-26
@@ -621,7 +624,7 @@ class LinearCRF(object):
        '充': 向后偏移1个时刻后的 x[t+1]='充' ;
          2: y[t]=2, 当前时刻的标签, 2代表标签 'E'
 
-         上述例子表面: t 时刻的隐藏状态 y[t] 不仅仅和 t时刻的观测 x[t]有关,
+         上述例子表明: t 时刻的隐藏状态 y[t] 不仅仅和 t时刻的观测 x[t]有关,
          还和 t-1 时刻的观测 x[t-1] 与 t+1 时刻的观测 x[t+1] 有关
 
         2.转移特征, 简化为与 时间 t 和 观测 x 无关
@@ -736,7 +739,10 @@ class LinearCRF(object):
 
     def batch_gradient_ascent(self,feature_weights,feature_count, dataset,max_iter,learning_rate=0.01):
         """
-        批量梯度上升 优化算法
+        批量梯度上升(带正则项) 优化算法
+
+        ref:
+        https://victorjiangxin.github.io/Chinese-Word-Segmentation/
 
         :param feature_weights:
         :param feature_count:
@@ -787,27 +793,41 @@ class LinearCRF(object):
 
         return
 
-    def fit(self, train_data_dir, max_iter,learning_rate=0.01):
+    def fit(self, train_data_dir, max_iter,learning_rate=0.01, pre_train_model=None):
         """
         模型训练 主流程
+
         :param train_data_dir:
         :param max_iter: 迭代次数
         :param learning_rate: 梯度上升的学习率
         :return:
         """
 
-        dataset, word_dict, tag_dict = self.get_train_data(train_data_dir)
+        if pre_train_model == None:
 
-        assert tag_dict == self.tag_index.keys() # 语料库中的标签的种类 需要与预设的一致
+            dataset, word_dict, tag_dict = self.get_train_data(train_data_dir)
 
-        self.feature_index,self.index_feature=self.build_feature_set(dataset, word_dict)
+            assert tag_dict == self.tag_index.keys() # 语料库中的标签的种类 需要与预设的一致
 
-        feature_count=self.statistic_feature_in_dataset(dataset)
+            self.feature_index,self.index_feature=self.build_feature_set(dataset, word_dict)
+
+            feature_count=self.statistic_feature_in_dataset(dataset)
+
+            feature_weights = np.random.randn(self.feature_num)  # 所有特征的权重初始化
+
+        else: # 在预训练模型的基础上 进行训练
+
+            self.load(pre_train_model)
+
+            feature_weights = self.weights
+
+            dataset, word_dict, tag_dict = self.get_train_data(train_data_dir)
+
+            feature_count = self.statistic_feature_in_dataset(dataset)
+
 
         print("Start training...")
 
-
-        feature_weights = np.random.randn(self.feature_num)  # 所有特征的权重初始化
 
         # 可以看出 普通的梯度上升算法收敛地很慢, 迭代次数 max_iter=100 才会收敛
         # self.weights = self.batch_gradient_ascent(feature_weights,feature_count, dataset,max_iter,learning_rate)
@@ -837,6 +857,7 @@ class LinearCRF(object):
         save_dict['weights'] = self.weights
         with open(model_dir+model_file_name, 'wb') as f:
             pickle.dump(save_dict, f)
+
         print("Save model successful!")
 
 
@@ -965,6 +986,7 @@ class LinearCRF(object):
         # print("The last feature is {}, it's weight is {}".format(
         #             self.index_feature[feature_id-1], self.weights[feature_id-1]))
 
+        print("Load crfcpp model successful!")
 
 class Report:
 
@@ -1117,7 +1139,10 @@ class CRFSegmentation(object):
     def score_cut_doc(self, in_file,ref_file, out_file):
         """
         对原始文档进行分词, 并对分词结果进行评价
-        包括 precison, recall, f1
+        评价指标包括 precison, recall, f1
+
+        ref:
+        https://zhuanlan.zhihu.com/p/100552669
 
         :param in_file:原始文档(未分词)
         :param ref_file: 标注文档
@@ -1168,9 +1193,9 @@ class Test:
         crf = LinearCRF()
         # crf.fit('../dataset/ChineseCutWord/pku_training.2col.tiny',max_iter=10,learning_rate=0.01)
 
-        # crf.fit('../dataset/ChineseCutWord/pku_training.2col.small', max_iter=100, learning_rate=0.01)
+        # crf.fit('../dataset/ChineseCutWord/pku_training.2col.small', max_iter=100, learning_rate=0.01) # Training time:40111s
 
-        crf.fit('../dataset/ChineseCutWord/pku_training.2col', max_iter=10, learning_rate=0.01) # 原始数据集跑的太慢了
+        crf.fit('../dataset/ChineseCutWord/pku_training.2col', max_iter=20, learning_rate=0.01,pre_train_model='model/pku_training.2col.model') # 原始数据集跑的太慢了
 
 
     def test_cut_sentence(self):
@@ -1194,9 +1219,9 @@ class Test:
 
     def test_cut_doc_and_eval(self):
 
-        seg = CRFSegmentation()
+        # seg = CRFSegmentation()
 
-        # seg = CRFSegmentation('model/crf_pku_small.model',use_crfcpp=False)
+        seg = CRFSegmentation('model/pku_training.2col.model',use_crfcpp=False) # F1: 0.46
 
         seg.score_cut_doc(in_file='test/data/test_weibo.txt',
                           ref_file='test/data/weibo.txt',

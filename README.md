@@ -51,7 +51,7 @@ xgboost 单线程版本v2
 
 第三阶段
 
-5.概率图模型: Naive Bayes, GMM, clustering(K-means, Hierachical) ,HMM , CRF
+5.概率图模型: NaiveBayes, GMM, clustering( K-means, Hierachical ) ,HMM , LinearCRF
 
 
 
