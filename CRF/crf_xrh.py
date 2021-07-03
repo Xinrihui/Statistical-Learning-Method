@@ -470,9 +470,14 @@ class LinearCRF(object):
             for offset in self.U_feature_offset:
 
                 pos = t + offset
-                if pos >= 1 and pos < n + 1:  # pos 位置必须合法
+                if pos >= 0 and pos < n :  # pos 位置必须合法
+
+                    # try:
 
                     feature = ('U', offset, sentence[pos], tag)
+
+                    # except Exception as err:
+                    #     print(err)  # debug 时 , 在此处打断点
 
                     if feature in self.feature_index:
                         selectd_feature.append(self.feature_index[feature])
@@ -1223,21 +1228,26 @@ class Test:
 
         seg = CRFSegmentation('model/pku_training.2col.model',use_crfcpp=False) # F1: 0.46
 
+        # 使用 微博的测试数据
         seg.score_cut_doc(in_file='test/data/test_weibo.txt',
                           ref_file='test/data/weibo.txt',
-                          out_file='test/result/weibo_crfcpp.txt')
+                          out_file='test/result/weibo_crf_result.txt')
 
+        # 使用 PKU的测试数据
+        # seg.score_cut_doc(in_file='test/data/test_pku.txt',
+        #                   ref_file='test/data/pku.txt',
+        #                   out_file='test/result/pku_crf_result.txt')
 
 
 if __name__ == '__main__':
 
     test = Test()
 
-    test.train_model()
+    # test.train_model()
 
     # test.test_cut_sentence()
 
-    # test.test_cut_doc_and_eval()
+    test.test_cut_doc_and_eval()
 
 
 
