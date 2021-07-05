@@ -1,6 +1,6 @@
-李航老师《统计学习方法》的相关算法实现
+# 李航老师《统计学习方法》的相关算法实现
 
-第一阶段
+## 第一阶段
 
 1.树模型： ID3, CART回归, CART分类
 
@@ -8,7 +8,7 @@
 
 纯手写(模型实现代码仅使用 numpy 库), 并且和 sklearn 中的相关模型进行性能对比
 
-第二阶段
+## 第二阶段
 
 3.提升算法: xgboost 回归, xgboost 二分类, xgboost 多分类
 
@@ -49,15 +49,23 @@ xgboost 单线程版本v2
  b. 若不复制数据, 使用共享内存, 经过试验, 发现共享内存效率一般,多进程的效率没有比单进程高多少
 
 
-第三阶段
+## 第三阶段
 
 5.概率图模型: NaiveBayes, GMM, clustering( K-means, Hierachical ) ,HMM , LinearCRF
 
 
+## 第四阶段
+
+6.神经网络模型: logisticRegression( LinerRegression, logisticRegression ), NN( word2vec )
+
 
 重要! 代码中使用的数据集下载指南：
 
-1.Mnist数据集 来自 https://github.com/Dod-o/Statistical-Learning-Method_Code/tree/master/Mnist 下载后进行解压,
+1.Mnist数据集, 来自 https://github.com/Dod-o/Statistical-Learning-Method_Code/tree/master/Mnist 下载后进行解压,
 然后使用 transMnist 中的代码转换为 csv 的格式
 
-各个文件夹中, ref 子目录为参考的代码, 就不在这里引用了~
+各个文件夹中, ref 子目录为参考资料
+
+## Ref
+
+https://github.com/Dod-o/Statistical-Learning-Method_Code
