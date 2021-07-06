@@ -1,12 +1,13 @@
 # 李航老师《统计学习方法》的相关算法实现
 
+纯手写(模型实现代码仅使用 numpy 库), 并且和 sklearn 或者是和其他机器学习库中的相关模型进行性能对比
+
 ## 第一阶段
 
 1.树模型： ID3, CART回归, CART分类
 
 2.提升算法： AdaBoost 回归, AdaBoost 二分类, AdaBoost 多分类(SAMME); GBDT 回归, GBDT 二分类, GBDT 多分类
 
-纯手写(模型实现代码仅使用 numpy 库), 并且和 sklearn 中的相关模型进行性能对比
 
 ## 第二阶段
 
@@ -56,10 +57,12 @@ xgboost 单线程版本v2
 
 ## 第四阶段
 
-6.神经网络模型: logisticRegression( LinerRegression, logisticRegression ), NN( word2vec )
+6.神经网络模型: logisticRegression( LinerRegression, logisticRegression ), MLP( word2vec )
 
 
-重要! 代码中使用的数据集下载指南：
+## 重要
+
+代码中使用的数据集下载指南：
 
 1.Mnist数据集, 来自 https://github.com/Dod-o/Statistical-Learning-Method_Code/tree/master/Mnist 下载后进行解压,
 然后使用 transMnist 中的代码转换为 csv 的格式

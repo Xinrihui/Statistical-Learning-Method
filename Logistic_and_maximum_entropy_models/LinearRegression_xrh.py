@@ -49,11 +49,11 @@ class LinerReg:
 
     test0: 回归 任务
     数据集：boston房价 数据集
-    参数: error_rate_threshold=0.01, max_iter=100, max_depth=3,learning_rate=0.1
+    参数:  max_iter=100,learning_rate=0.1
     训练集数量：455
     测试集数量：51
-    测试集的 MSE： 7.610308909461337
-    模型训练时长：160s
+    测试集的 MSE： 16.9
+    模型训练时长：0.4s
 
     """
 
@@ -173,7 +173,7 @@ class LinerReg:
                 print('epcho: {} , loss:{}'.format(epoch,loss))
 
         else: # 直接求解析解
-            #TODO:  懒得推公式, 忽略偏置b, 导致模型无法收敛,
+            # 懒得推公式, 忽略偏置b, 导致模型无法收敛,
             # 解决: 对 y 进行归一化
 
             X_square = np.dot(X.T, X)
@@ -228,7 +228,7 @@ class Test:
 
         X = normalize(X) # 回归问题 特征X 必须做归一化, 否则梯度会出现溢出
 
-        # TODO: y 和 特征X 的差距较大, 我们发现线性回归模型不收敛, 解决方案:
+        # y 和 特征X 的差距较大, 我们发现线性回归模型不收敛, 解决方案:
         #  M1.可以对 y 进行归一化
         #  M2.在 h(x) 中加入偏置项 b, 一般线性回归都要考虑偏置项
         y = normalize(y)
@@ -253,7 +253,7 @@ class Test:
 
         lr.fit(X_train, y_train, use_BGD=False)
 
-        # TODO: 当 L1 正则化系数 reg_alpha=1 时, 可以观察到特征的权重 W 中出现很小的值,
+        #  当 L1 正则化系数 reg_alpha=1 时, 可以观察到特征的权重 W 中出现很小的值,
         #  说明发生了 特征选择的作用;
         #  W:  [ 4.54462493e-04  9.67745714e-02 -1.17590863e-01  1.05890221e-01
         #    -5.46992763e-02  2.77627850e+00  5.45168872e-02 -1.20214803e-01
