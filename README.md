@@ -57,7 +57,7 @@ xgboost 单线程版本v2
 
 ## 第四阶段
 
-6.神经网络模型: logisticRegression( LinerRegression, logisticRegression ), MLP( word2vec )
+6.神经网络模型: 线性模型( LinerRegression, logisticRegression ), MLP( 二分类, 多分类 )
 
 
 ## 重要

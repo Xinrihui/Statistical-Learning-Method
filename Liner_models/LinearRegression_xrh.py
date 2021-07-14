@@ -17,7 +17,9 @@ from sklearn.linear_model import LinearRegression
 
 def normalize(X):
     """
-    对所有特征进行归一化
+    0均值归一化( Z-Score Normalization)
+
+    对所有特征进行 0均值归一化
 
     :param X:
     :return:

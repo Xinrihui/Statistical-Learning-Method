@@ -308,7 +308,9 @@ class LR_MultiClassifier:
         """
         N = np.shape(X)[0]
 
-        F = np.dot(W, X.T) + np.tile(b.reshape((-1, 1)), N)  # shape:(K,N)
+        F = np.dot(W, X.T) + b
+
+        # F = np.dot(W, X.T) + np.tile(b.reshape((-1, 1)), N)  # shape:(K,N)
         # W shape(K,m), X.T shape(m,N) , b shape(K,) -> shape(K,N)
 
         return F
@@ -355,13 +357,12 @@ class LR_MultiClassifier:
 
         F = self.calc_F(W, b, X) # shape:(K,N)
 
-
         s = self.softmax(F) - y_one_hot # shape(K,N)
 
         grad_W = np.dot( s , X )  # shape: (K,m)
         #  s shape(K,N) , X shape(N,m)
 
-        grad_b = np.sum(s,axis=1) # axis=1 干掉第1个维度, shape: (K,)
+        grad_b = np.sum(s,axis=1,keepdims=True) # axis=1 干掉第1个维度, shape: (K,)
 
         grad_W = grad_W / N
         grad_b = grad_b / N
@@ -399,7 +400,7 @@ class LR_MultiClassifier:
 
         # 模型参数初始化
         W = np.zeros((self.K, m))
-        b = np.zeros((self.K,))
+        b = np.zeros((self.K,1))
 
         # 将标签y one-hot 化, shape: (K,N)
         y_one_hot = (y == np.array(range(self.K)).reshape(-1, 1)).astype(
@@ -659,7 +660,9 @@ class Test:
         # 将数据集一分为二，训练数据占80%，测试数据占20%
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=1024)
 
-        clf = LR_MultiClassifier(K=K,reg_lambda=0.1,use_reg=2)
+        # clf = LR_MultiClassifier(K=K,reg_lambda=0.1,use_reg=1) # TODO: 加入 L1 正则化后的模型效果下降
+
+        clf = LR_MultiClassifier(K=K, reg_lambda=0.1, use_reg=2)
         clf.fit(X_train, y_train,max_iter=50,learning_rate=0.05)
 
         y_predict = clf.predict(X_test)
@@ -689,6 +692,6 @@ if __name__ == '__main__':
 
     # test.test_Mnist_dataset_2classification(60000, 10000)
 
-    test.test_Mnist_dataset(60000,10000)
+    # test.test_Mnist_dataset(60000,10000)
 
-    # test.test_iris_dataset()
+    test.test_iris_dataset()
