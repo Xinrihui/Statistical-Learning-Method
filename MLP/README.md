@@ -10,14 +10,11 @@
 
     3.实现如下优化算法:
 
-'''
-
      (1) 带正则化(L1, L2)的批量梯度下降(BGD)
      (2) Mini-batch 梯度下降
      (3) 带动量(Momentum)的 Mini-batch 梯度下降
      (4) Adam Mini-batch 梯度下降
 
-'''
 
     4.实现了 dropout 正则化
 
