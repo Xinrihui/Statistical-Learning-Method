@@ -20,6 +20,7 @@
 
     5.实现了 Xavier 模型参数随机初始化
 
+    6.实现了 BatchNormalization 加速模型训练
 
 ### 1.2 实验结果
 
@@ -30,7 +31,7 @@
     n_test = 10000
 
     超参数:
-    MLP 各个层的维度: n_list=[784,50,10,1],
+    MLP 各个层的维度: layers_dims=[784,50,10,1],
     加入L2正则化: use_reg=2, reg_lambda=0.7,
     learning_rate=1.0,
     max_iter=500
@@ -68,7 +69,7 @@ weighted avg       0.99      0.99      0.99     10000
     n_test = 1000
 
     超参数:
-    MLP 各个层的维度: n_list=[784,100,10],
+    MLP 各个层的维度: layers_dims=[784,100,10],
     使用 sigmoid 激活函数,
     max_iter=5000,
     learning_rate=1
@@ -125,7 +126,7 @@ weighted avg       0.91      0.92      0.91      1000
 
     超参数:
 
-    MLP 各个层的维度: n_list=[784,100,10],
+    MLP 各个层的维度: layers_dims=[784,100,10],
     使用 sigmoid 激活函数,
     max_iter=5000,
     learning_rate=1
@@ -141,7 +142,7 @@ weighted avg       0.91      0.92      0.91      1000
     n_test = 1000
 
     超参数:
-    MLP 各个层的维度: n_list=[784,200,50,10],
+    MLP 各个层的维度: layers_dims=[784,200,50,10],
     使用 sigmoid 激活函数,
     max_iter=2000,
     learning_rate=1.5
@@ -162,7 +163,7 @@ weighted avg       0.91      0.92      0.91      1000
     n_test = 1000
 
     超参数:
-    MLP 各个层的维度: n_list=[784,200,50,10],
+    MLP 各个层的维度: layers_dims=[784,200,50,10],
     使用 sigmoid 激活函数,
     加入L2正则化, reg_lambda = 1.0
     max_iter=2000,
@@ -183,7 +184,7 @@ weighted avg       0.91      0.92      0.91      1000
     n_train = 6000
     n_test = 1000
 
-    MLP 各个层的维度: n_list=[784,200,50,10],
+    MLP 各个层的维度: layers_dims=[784,200,50,10],
     使用 relu 激活函数,
     max_iter=1000,
     learning_rate=0.5
@@ -231,7 +232,7 @@ weighted avg       0.91      0.92      0.91      1000
     n_train = 6000
     n_test = 1000
 
-    MLP 各个层的维度: n_list=[784,200,50,10],
+    MLP 各个层的维度: layers_dims=[784,200,50,10],
     使用 relu 激活 函数
     加入L2正则化, reg_lambda = 1.0
     max_iter=1000,
@@ -254,7 +255,7 @@ weighted avg       0.91      0.92      0.91      1000
     n_train = 60000
     n_test = 10000
 
-    MLP 各个层的维度: n_list=[784,200,50,10],
+    MLP 各个层的维度: layers_dims=[784,200,50,10],
     使用 relu 激活 函数
     max_iter=1000,
     learning_rate=0.5
@@ -276,7 +277,7 @@ weighted avg       0.91      0.92      0.91      1000
     n_train = 60000
     n_test = 10000
 
-    MLP 各个层的维度: n_list=[784,200,50,10],
+    MLP 各个层的维度: layers_dims=[784,200,50,10],
     使用 relu 激活函数
     加入L2正则化,reg_lambda=0.5
 
@@ -294,7 +295,7 @@ weighted avg       0.91      0.92      0.91      1000
     n_train = 60000
     n_test = 10000
 
-    MLP 各个层的维度: n_list=[784,200,50,10],
+    MLP 各个层的维度: layers_dims=[784,200,50,10],
     使用 relu 激活函数,
     采用 Xavier参数随机初始化,
     开启 dropout 正则化,keep_prob=0.8
@@ -314,7 +315,7 @@ weighted avg       0.91      0.92      0.91      1000
     n_train = 60000
     n_test = 10000
 
-    MLP 各个层的维度: n_list=[784,200,50,10],
+    MLP 各个层的维度: layers_dims=[784,200,50,10],
     使用 relu 激活函数,
     采用 Xavier参数随机初始化,
     开启 dropout 正则化,keep_prob=0.8
@@ -337,7 +338,7 @@ weighted avg       0.91      0.92      0.91      1000
     n_train = 60000
     n_test = 10000
 
-    MLP 各个层的维度: n_list=[784,200,50,10],
+    MLP 各个层的维度: layers_dims=[784,200,50,10],
     使用 relu 激活函数,
     采用 Xavier参数随机初始化,
     开启 L2 正则化, reg_lambda=0.1
@@ -370,7 +371,7 @@ weighted avg       0.91      0.92      0.91      1000
     n_train = 60000
     n_test = 10000
 
-    MLP 各个层的维度: n_list=[784,200,50,10],
+    MLP 各个层的维度: layers_dims=[784,200,50,10],
     使用 relu 激活函数,
     采用 Xavier参数随机初始化,
     开启 dropout 正则化, keep_prob=0.8
@@ -393,5 +394,79 @@ weighted avg       0.91      0.92      0.91      1000
     Momentum 梯度下降 epcho: 0 , loss:0.529549536806474
     Adam 梯度下降  epcho: 0 , loss:0.19822740261529814
     可以看出Adam 的收敛速度比 Momentum 快
+
+```
+
+```
+   13.Mnist 数据集(多分类)
+    n_train = 60000
+    n_test = 10000
+
+    MLP 各个层的维度: layers_dims=[784,200,50,10],
+    使用 relu 激活函数,
+    采用 Xavier参数随机初始化,
+    开启 dropout 正则化, keep_prob=0.8
+
+    使用 Adam 梯度下降,  beta1 = 0.9, beta2 = 0.99
+    mini_batch_size = 512
+    max_iter=60,
+    learning_rate=0.01
+
+    正确率(测试集)： 0.974
+    train accuracy :0.998
+    训练时长： 215s
+```
+
+```
+   14.Mnist 数据集(多分类)
+    n_train = 60000
+    n_test = 10000
+
+    MLP 各个层的维度: layers_dims=[784,200,50,10],
+    使用 relu 激活函数,
+    采用 Xavier参数随机初始化,
+    关闭 dropout 正则化
+    开启 batchnorm , beta1 = 0.9
+
+    使用 Adam 梯度下降,  beta1 = 0.9, beta2 = 0.99
+    mini_batch_size = 512
+    max_iter=40,
+    learning_rate=0.01
+
+    正确率(测试集)： 0.972
+    train accuracy :0.998
+    训练时长： 157 s
+
+    epcho: 0 , loss:0.1749804396799625
+    epcho: 10 , loss:0.06362727361132789
+    epcho: 20 , loss:0.01902476595930249
+    epcho: 30 , loss:0.06340691019349942
+
+```
+
+```
+   15.Mnist 数据集(多分类)
+    n_train = 60000
+    n_test = 10000
+
+    MLP 各个层的维度: layers_dims=[784,200,50,10],
+    使用 relu 激活函数,
+    采用 Xavier参数随机初始化,
+    关闭 dropout 正则化
+    开启 batchnorm , beta1 = 0.9
+
+    使用 MinBatch 梯度下降,
+    mini_batch_size = 512
+    max_iter=40,
+    learning_rate=0.01
+
+    正确率(测试集)： 0.95
+    train accuracy :0.96
+    训练时长： 115 s
+
+    epcho: 0 , loss:0.6794630046009313
+    epcho: 10 , loss:0.2413543431679431
+    epcho: 20 , loss:0.17893451362036314
+    epcho: 30 , loss:0.2736255554879355
 
 ```

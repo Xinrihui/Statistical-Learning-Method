@@ -24,6 +24,11 @@ from planar_utils import plot_decision_boundary, load_planar_dataset, load_extra
 from lib.Normalize_xrh import *
 
 from lib.Activation_xrh import *
+from lib.Batchnormalization_xrh import *
+
+from lib import Optimizer_xrh as optim
+
+from lib import Initializer_xrh as initial
 
 
 import importlib
@@ -438,7 +443,21 @@ class MLP_MultiClassifier:
     """
     多层感知机 MLP (多分类)
 
-    1.通过 数值优化方法 梯度下降 找到最优解
+    1.实现了向量化的前向传播和后向传播算法
+
+    2.实现激活函数 sigmoid, relu
+
+    3.实现如下优化算法:
+
+     (1) 带正则化(L1, L2)的批量梯度下降(BGD)
+     (2) Mini-batch 梯度下降
+     (3) 带动量(Momentum)的 Mini-batch 梯度下降
+     (4) Adam Mini-batch 梯度下降
+
+
+    4.实现了 dropout 正则化
+
+    5.实现了 Xavier 模型参数随机初始化
 
 
     Author: xrh
@@ -449,15 +468,24 @@ class MLP_MultiClassifier:
 
     test1: 多分类任务
     数据集：Mnist
-    超参数: layers_dims=[ ], use_reg=2, reg_lambda=0.7, learning_rate=1.0,max_iter=500
+    超参数:
+    layers_dims=[784,200,50,10],
+    使用 relu 激活函数,
+    采用 Xavier参数随机初始化,
+    开启 dropout 正则化, keep_prob=0.8
+    使用 Adam 梯度下降,  beta1 = 0.9, beta2 = 0.99
+    mini_batch_size = 640
+    max_iter=100,
+    learning_rate=0.01
+
     训练集数量：60000
     测试集数量：10000
-    正确率：
-    训练时长： s
+    正确率：0.975
+    训练时长： 323s
 
     """
 
-    def __init__(self, K,
+    def __init__(self, K=None,
                  activation='sigmoid',
 
                  reg_alpha=0.5,
@@ -466,6 +494,8 @@ class MLP_MultiClassifier:
 
                  keep_prob=1.0,
                  use_dropout=False,
+
+                 use_batchnorm=False,
 
                  model_path='model/xrh.model',
                  use_pre_train=True):
@@ -484,6 +514,8 @@ class MLP_MultiClassifier:
 
         :param keep_prob:  dropout 正则化中, 每一层的神经元有效的比例  (默认 1.0)
         :param use_dropout: 开启 dropout 正则化 (默认 False 不开启)
+
+        :param use_batchnorm : 开启 batchnorm(默认 False 不开启)
 
         :param model_path: 预训练模型的路径
         :param use_pre_train: 是否使用预训练的模型
@@ -505,6 +537,9 @@ class MLP_MultiClassifier:
             self.keep_prob = keep_prob
             self.use_dropout = use_dropout
 
+            self.bn_param = {} # BN 的超参数
+            self.use_batchnorm = use_batchnorm
+
             # 模型的参数
             self.parameters = {}
 
@@ -516,11 +551,12 @@ class MLP_MultiClassifier:
 
 
 
-    def __forwoard_layer(self, a_prev, W, b, activation='sigmoid',
-                            keep_prob=1.0, use_dropout=False):
+    def __forwoard_layer(self,l,a_prev, W, b, activation='sigmoid',
+                            keep_prob=1.0, use_dropout=False,gamma=None,beta=None,bn_param=None,use_batchnorm=False):
         """
         单层的正向传播算法
 
+        :param l : 记录从前往后第 l 层神经元
         :param a_prev: (n_prev,N)
         :param W: shape (n_current, n_prev)
                         n_current -当前层向量的维度
@@ -531,6 +567,12 @@ class MLP_MultiClassifier:
         :param keep_prob:  dropout 正则化中, 每一层的神经元有效的比例  (默认 0.8)
         :param use_dropout: 开启 dropout 正则化 (默认 False 不开启)
 
+        :param gamma: batch normalizaion 的方差参数
+        :param beta:  batch normalizaion 的均值参数
+        :param bn_param:  batch normalizaion 的超参数
+        :param use_batchnorm: 开启 batch normalizaion
+                              (默认 False 不开启)
+
         :return:
         """
 
@@ -538,18 +580,25 @@ class MLP_MultiClassifier:
         # W shape (n_current, n_prev) , a_prev shape  (n_prev,N)
         # b (n_current,1)  boardcast->  (n_current,N)
 
+        cache_bn = None
+        if use_batchnorm: # 开启 batch normalizaion
+            cache_bn,z_ba = BatchNormalization.batchnorm_forward(l,z, gamma, beta, bn_param)
+        else:
+            z_ba = z
+            x_ba = None
+
         a = None
 
         if activation == 'sigmoid':
-            a = Activation.sigmoid(z)  # shape (n_current,N)
+            a = Activation.sigmoid(z_ba)  # shape (n_current,N)
 
         elif activation == 'softmax':
 
-            a = Activation.softmax(z)  # shape (n_current,N)
+            a = Activation.softmax(z_ba)  # shape (n_current,N)
 
         elif activation == 'relu':
 
-            a = Activation.relu(z)  # shape (n_current,N)
+            a = Activation.relu(z_ba)  # shape (n_current,N)
 
         d = None
 
@@ -560,7 +609,7 @@ class MLP_MultiClassifier:
 
             a[d > keep_prob] = 0  # a 以一定的概率失活
 
-        return z, a, d
+        return z, a, d,cache_bn
 
     def forwoard_propagation(self,
                              parameters,
@@ -571,6 +620,8 @@ class MLP_MultiClassifier:
                              use_reg=0,
                              keep_prob=1.0,
                              use_dropout=False,
+                             bn_param = None,
+                             use_batchnorm = False,
                              mode='training'):
         """
         神经网络的前向传播算法
@@ -592,61 +643,86 @@ class MLP_MultiClassifier:
         :param keep_prob:  dropout 正则化中, 每一层的神经元有效的比例  (默认 1.0)
         :param use_dropout: 开启 dropout 正则化 (默认 False 不开启)
 
+        :param bn_param:  batch normalizaion 的超参数
+        :param use_batchnorm: 开启 batch normalizaion
+                              (默认 False 不开启)
+
         :param mode: 'training' 训练模式
                     'inference' 推理模式
                     前向传播算法在模型训练和推理时都要用到
         :return:
         """
 
-        if mode == 'inference':  # 推理时肯定不开启 dropout 正则化
-            use_dropout = False
+        if mode == 'inference':
+            use_dropout = False  # 推理时肯定不开启 dropout 正则化
+            bn_param['mode'] = 'inference' # 设置 batchnorm 模式为推理模式
+        else:
+            bn_param['mode'] = 'training'
 
         N = np.shape(X)[0]
 
         W_list = parameters['W']
         b_list = parameters['b']
 
+        gama_list = parameters['gama']
+        beta_list = parameters['beta']
+
         z_list = []
         a_list = []
 
+        # 存储 dropout 中的失活向量
         d_list = []
+
+        # 存储 batchnorm 过程中的 中间向量, 为了之后的反向传播
+        #  cache = {'x':x,'mean':mean,'var':var,'x_ba':x_ba,'y':y,'z_ba': y}
+        #  x_ba 归一化向量 , z_ba=y 等价变换向量
+
+        cache_bn_list=[]
 
         L = len(W_list)  # MLP 的层数 L=2
 
         # l=0 输入层
         l = 0
-        z, a, d = self.__forwoard_layer(a_prev=X.T, W=W_list[l], b=b_list[l], activation=activation,
-                                        keep_prob=keep_prob, use_dropout=use_dropout)
+        z, a, d, cache_bn = self.__forwoard_layer(l,a_prev=X.T, W=W_list[l], b=b_list[l], activation=activation,
+                                        keep_prob=keep_prob, use_dropout=use_dropout,
+                                        gamma=gama_list[l],beta=beta_list[l],bn_param=bn_param,use_batchnorm=use_batchnorm)
         # X shape -> X.T shape (m,N)
 
         z_list.append(z)
         a_list.append(a)
         d_list.append(d)
+        cache_bn_list.append(cache_bn)
 
         # 隐藏层 l=1,...,L-2
         for l in range(1, L - 1):
-            z, a, d = self.__forwoard_layer(a_prev=a, W=W_list[l], b=b_list[l], activation=activation,
-                                            keep_prob=keep_prob, use_dropout=use_dropout)
+
+            z, a, d,cache_bn = self.__forwoard_layer(l,a_prev=a, W=W_list[l], b=b_list[l], activation=activation,
+                                            keep_prob=keep_prob, use_dropout=use_dropout,
+                                            gamma=gama_list[l], beta=beta_list[l], bn_param=bn_param, use_batchnorm=use_batchnorm)
 
             z_list.append(z)
             a_list.append(a)
             d_list.append(d)
+            cache_bn_list.append(cache_bn)
 
         # 输出层 l=L-1
         l = L - 1
-        z, a, _ = self.__forwoard_layer(a_prev=a, W=W_list[l], b=b_list[l], activation='softmax')
+        z, a, _, _= self.__forwoard_layer(l,a_prev=a, W=W_list[l], b=b_list[l], activation='softmax')
         # 输出层的激活函数 必须为 sofmax
         # 输出层的激活值不用加上 dropout 失活
+        # 输出层不用考虑加上 batchnorm
+
         z_list.append(z)
         a_list.append(a)
         d_list.append(None)
+        cache_bn_list.append(None)
 
         loss = None
 
         if mode == 'training':
             loss = self.last_layer_loss(parameters, N, z, y_onehot, reg_alpha=reg_alpha,reg_lambda=reg_lambda,use_reg=use_reg)
 
-        return z_list, a_list, d_list, loss
+        return z_list, a_list, d_list, cache_bn_list,loss
 
     def last_layer_loss(self, parameters, N, z, y_onehot,
                         reg_alpha=0.5,reg_lambda=0.5,use_reg=0):
@@ -707,7 +783,6 @@ class MLP_MultiClassifier:
         :param y_onehot:
         :param a_prev:
         :param d_prev:
-
         :param reg_alpha: L1 正则化参数
         :param reg_lambda: L2 正则化参数
         :param use_reg: 正则化类型选择,
@@ -751,19 +826,30 @@ class MLP_MultiClassifier:
 
         return grad_z, grad_W, grad_b, grad_a
 
-    def __backwoard_layer(self, N, W, grad_a, z, a_prev, d_prev, activation='sigmoid',
+    def __backwoard_layer(self, N, W, grad_a, z, a_prev, d_prev,
+                          gama=None,beta=None,cache_bn=None,
+                          activation='sigmoid',
                           reg_alpha=0.5, reg_lambda=0.5, use_reg=0,
-                          keep_prob=1.0, use_dropout=False):
+                          keep_prob=1.0, use_dropout=False,
+                          use_batchnorm=False):
         """
         单层的反向传播
 
         :param N: 样本个数
+
         :param W: shape (n_current, n_prev)
                 n_current -当前层向量的维度
                 n_prev    -上一层向量的维度
-        :param grad_a: (n_current,N)
+        :param grad_a: shape(n_current,N)
         :param z: shape (n_current,N)
-        :param a_prev: (n_prev,N)
+        :param a_prev: shape (n_prev,N)
+
+        :param d_prev: shape (n_prev,N)
+
+        :param gama:
+        :param beta:
+        :param cache_bn: BN 正向传播过程中的中间变量
+
         :param activation: 选择的激活函数, 要与前向传播对于此层的设置相匹配
 
         :param reg_alpha: L1 正则化参数
@@ -776,6 +862,9 @@ class MLP_MultiClassifier:
         :param keep_prob:  dropout 正则化中, 每一层的神经元有效的比例  (默认 0.8)
         :param use_dropout: 开启 dropout 正则化 (默认 False 不开启)
 
+        :param use_batchnorm: 开启 batch normalizaion
+                              (默认 False 不开启)
+
         :return:
         """
         grad_activation = None
@@ -786,7 +875,16 @@ class MLP_MultiClassifier:
         elif activation == 'relu':
             grad_activation = Activation.grad_relu(z)  # shape: (n_current,N)
 
-        grad_z = grad_a * grad_activation  # shape: (n_current,N)
+
+        grad_z_ba = grad_a * grad_activation  # shape: (n_current,N)
+
+        if use_batchnorm: # 开启 batch normalizaion
+            grad_z,grad_gama,grad_beta = BatchNormalization.batchnorm_bakward(N,gama,beta,grad_z_ba,cache_bn)
+
+        else: # 关闭 batch normalizaion
+            grad_z = grad_z_ba
+            grad_gama = 0
+            grad_beta = 0
 
         grad_W = np.dot(grad_z, a_prev.T)  #
         # grad_z shape:(n_current,N) ,a_prev.T shape:(N,n_prev)
@@ -816,17 +914,20 @@ class MLP_MultiClassifier:
             grad_a[d_prev > keep_prob] = 0  # grad_a 以一定的概率失活
 
 
-        return grad_z, grad_W, grad_b, grad_a
+        return grad_z, grad_W, grad_b, grad_a,grad_gama,grad_beta
 
     def backwoard_propagation(self, activation,
                                     parameters,
                                     z_list, a_list, d_list,
+                                    cache_bn_list,
                                     X, y_onehot,
                                     reg_alpha=0.5,
                                     reg_lambda=0.5,
                                     use_reg=0,
                                     keep_prob=1.0,
-                                    use_dropout=False):
+                                    use_dropout=False,
+                                    bn_param = None,
+                                    use_batchnorm = False):
         """
         计算反向传播
 
@@ -836,6 +937,8 @@ class MLP_MultiClassifier:
         :param parameters:模型参数
         :param z_list:
         :param a_list:
+        :param d_list:
+        :param cache_bn_list: BN 正向传播过程中的中间变量
         :param X:样本特征 shape (N,m) N- 样本个数 , m-特征维度
         :param y_onehot: 样本标签
 
@@ -849,12 +952,19 @@ class MLP_MultiClassifier:
         :param keep_prob:  dropout 正则化中, 每一层的神经元有效的比例  (默认 1.0 )
         :param use_dropout: 开启 dropout 正则化 (默认 False 不开启)
 
+        :param bn_param:  batch normalizaion 的超参数
+        :param use_batchnorm: 开启 batch normalizaion
+                              (默认 False 不开启)
+
         :return:
         """
         N = np.shape(X)[0]
 
         W_list = parameters['W']
         b_list = parameters['b']
+
+        gama_list = parameters['gama']
+        beta_list = parameters['beta']
 
         L = len(W_list)  # MLP 的层数 L=2
 
@@ -863,38 +973,54 @@ class MLP_MultiClassifier:
         grad_a_list = []
         grad_z_list = []  # delta
 
+        grad_gama_list=[]
+        grad_beta_list=[]
+
         # 输出层
         l = L - 1
         grad_z, grad_W, grad_b, grad_a = self.__backwoard_last_layer(N, W=W_list[l], a=a_list[l], y_onehot=y_onehot,
                                                                      a_prev=a_list[l - 1], d_prev=d_list[l - 1],
                                                                      reg_alpha=reg_alpha, reg_lambda=reg_lambda,use_reg=use_reg,
                                                                      keep_prob=keep_prob, use_dropout=use_dropout)
+                                                                    # 输出层未使用 BN
 
         grad_W_list.append(grad_W)
         grad_b_list.append(grad_b)
         grad_a_list.append(grad_a)
         grad_z_list.append(grad_z)
 
+        # 输出层未使用 BN, 梯度记为0
+        grad_gama_list.append(0)
+        grad_beta_list.append(0)
+
         # 从后往前遍历 隐藏层  l = L-2 ,...,1
         for l in range(L - 2, 0, -1):
-            grad_z, grad_W, grad_b, grad_a = self.__backwoard_layer(N, W=W_list[l], grad_a=grad_a, z=z_list[l],
-                                                                    a_prev=a_list[l - 1], activation=activation,
-                                                                    d_prev=d_list[l - 1],
-                                                                    reg_alpha=reg_alpha, reg_lambda=reg_lambda,use_reg=use_reg,
-                                                                    keep_prob=keep_prob,use_dropout=use_dropout)
+            grad_z, grad_W, grad_b, grad_a,grad_gama,grad_beta = self.__backwoard_layer(N, W=W_list[l], grad_a=grad_a, z=z_list[l],a_prev=a_list[l - 1],
+                                                                                        d_prev=d_list[l - 1],
+                                                                                        gama = gama_list[l], beta=beta_list[l],cache_bn = cache_bn_list[l],
+                                                                                        activation = activation,
+                                                                                        reg_alpha=reg_alpha, reg_lambda=reg_lambda,use_reg=use_reg,
+                                                                                        keep_prob=keep_prob,use_dropout=use_dropout,
+                                                                                        use_batchnorm = use_batchnorm
+                                                                                        )
 
             grad_W_list.append(grad_W)
             grad_b_list.append(grad_b)
             grad_a_list.append(grad_a)
             grad_z_list.append(grad_z)
 
+            grad_gama_list.append(grad_gama)
+            grad_beta_list.append(grad_beta)
+
         # 输入层
         l = 0
-        grad_z, grad_W, grad_b, grad_a = self.__backwoard_layer(N, W=W_list[l], grad_a=grad_a, z=z_list[l],
-                                                                a_prev=X.T, activation=activation,
+        grad_z, grad_W, grad_b, grad_a,grad_gama,grad_beta = self.__backwoard_layer(N, W=W_list[l], grad_a=grad_a, z=z_list[l], a_prev=X.T,
                                                                 d_prev=None,
+                                                                gama = gama_list[l], beta=beta_list[l],cache_bn = cache_bn_list[l],
+                                                                activation=activation,
                                                                 reg_alpha=reg_alpha, reg_lambda=reg_lambda, use_reg=use_reg,
-                                                                use_dropout=False
+                                                                use_dropout=False,
+                                                                use_batchnorm=use_batchnorm
                                                                 ) # 因为前面已经没有层了, 输入层 无需计算 grad_a, 也不用考虑dropout
 
         grad_W_list.append(grad_W)
@@ -902,13 +1028,19 @@ class MLP_MultiClassifier:
         grad_a_list.append(grad_a)
         grad_z_list.append(grad_z)
 
+        grad_gama_list.append(grad_gama)
+        grad_beta_list.append(grad_beta)
+
         # 梯度列表全部反向, 接下来都要从前向后遍历
         grad_W_list.reverse()
         grad_b_list.reverse()
         grad_a_list.reverse()
         grad_z_list.reverse()
 
-        return grad_W_list, grad_b_list
+        grad_gama_list.reverse()
+        grad_beta_list.reverse()
+
+        return grad_W_list, grad_b_list,grad_gama_list,grad_beta_list
 
 
     def fit(self, X, y, layers_dims,init_mode='Random', learning_rate=1.0, max_iter=500, mini_batch_size=64, optimize_mode='BGD',
@@ -926,7 +1058,7 @@ class MLP_MultiClassifier:
         K: 输出层向量的维度
 
         :param init_mode: 初始化模型参数的模式
-                     'Zero'  初始化为0
+                     'Zero'  初始化为 0
                      'Random' 随机初始化 (默认)
                      'Xavier' 配合 Relu 使用的一种随机初始化
 
@@ -957,7 +1089,12 @@ class MLP_MultiClassifier:
 
         # 模型参数初始化
         class_name = init_mode + 'Initializer' #  'Random' + 'Initializer' = 'RandomInitializer'
-        Initializer = getattr(importlib.import_module('lib.Initializer_xrh'), class_name)
+
+        # Initializer = getattr(importlib.import_module('lib.Initializer_xrh'), class_name)
+
+        if not hasattr( initial , class_name):
+            raise ValueError('Invalid init_mode "%s"' % init_mode)
+        Initializer = getattr(initial, class_name)
 
         initializer = Initializer()
         parameters = initializer.initialize_parameters(layers_dims)
@@ -969,8 +1106,13 @@ class MLP_MultiClassifier:
         loss_list = []  # 记录每次梯度下降的损失, 然后可以画出模型的学习曲线
 
         # 配置优化算法
-        class_name = optimize_mode + 'Optimizer' #  'BGD' + 'Optimizer' = 'BGDOptimizer'
-        Optimizer = getattr(importlib.import_module('lib.Optimizer_xrh'), class_name)
+        class_name = optimize_mode + 'Optimizer'  # 'BGD' + 'Optimizer' = 'BGDOptimizer'
+        if not hasattr( optim , class_name):
+            raise ValueError('Invalid optimize_mode "%s"' % optimize_mode)
+        Optimizer = getattr(optim, class_name)
+
+        # class_name = optimize_mode + 'Optimizer' #  'BGD' + 'Optimizer' = 'BGDOptimizer'
+        # Optimizer = getattr(importlib.import_module('lib.Optimizer_xrh'), class_name)
 
         optimizer = Optimizer(parameters)
 
@@ -986,32 +1128,38 @@ class MLP_MultiClassifier:
                 X_batch, y_onehot_batch = batch
 
                 # 把一个batch的数据喂给模型, 进行正向和反向传播, 并更新参数
-                z_list, a_list, d_list, loss = self.forwoard_propagation(parameters=parameters,
+                z_list, a_list, d_list,cache_bn_list, loss = self.forwoard_propagation(parameters=parameters,
                                                                          X=X_batch,
                                                                          y_onehot=y_onehot_batch,
                                                                          activation=self.activation,
-                                                                         mode='training',
                                                                          reg_alpha=self.reg_alpha,
                                                                          reg_lambda=self.reg_lambda,
                                                                          use_reg=self.use_reg,
                                                                          keep_prob=self.keep_prob,
-                                                                         use_dropout=self.use_dropout)
+                                                                         use_dropout=self.use_dropout,
+                                                                         bn_param = self.bn_param,
+                                                                         use_batchnorm = self.use_batchnorm,
+                                                                         mode = 'training'
+                                                                                       )
 
-                grad_W_list, grad_b_list = self.backwoard_propagation(activation=self.activation,
+                grad_W_list, grad_b_list,grad_gama_list,grad_beta_list = self.backwoard_propagation(activation=self.activation,
                                                                       parameters=parameters,
                                                                       z_list=z_list,
                                                                       a_list=a_list,
                                                                       d_list=d_list,
+                                                                      cache_bn_list=cache_bn_list,
                                                                       X=X_batch,
                                                                       y_onehot=y_onehot_batch,
                                                                       reg_alpha=self.reg_alpha,
                                                                       reg_lambda=self.reg_lambda,
                                                                       use_reg=self.use_reg,
                                                                       keep_prob=self.keep_prob,
-                                                                      use_dropout=self.use_dropout
+                                                                      use_dropout=self.use_dropout,
+                                                                      bn_param=self.bn_param,
+                                                                      use_batchnorm=self.use_batchnorm,
                                                                       )
 
-                parameters = optimizer.update_parameters(learning_rate, parameters, grad_W_list, grad_b_list,t=count_gd)
+                parameters = optimizer.update_parameters(learning_rate, parameters, grad_W_list, grad_b_list,grad_gama_list,grad_beta_list,t=count_gd)
 
                 count_gd += 1  # 梯度下降的次数 +1
 
@@ -1050,6 +1198,9 @@ class MLP_MultiClassifier:
         save_dict['keep_prob'] = self.keep_prob
         save_dict['use_dropout'] = self.use_dropout
 
+        save_dict['bn_param'] = self.bn_param
+        save_dict['use_batchnorm'] = self.use_batchnorm
+
         save_dict['parameters'] = self.parameters
 
         with open(model_dir, 'wb') as f:
@@ -1077,6 +1228,9 @@ class MLP_MultiClassifier:
         self.keep_prob = save_dict['keep_prob']
         self.use_dropout = save_dict['use_dropout']
 
+        self.bn_param = save_dict['bn_param']
+        self.use_batchnorm = save_dict['use_batchnorm']
+
         self.parameters = save_dict['parameters']
 
         print("Load model successful!")
@@ -1089,8 +1243,9 @@ class MLP_MultiClassifier:
         :param X:
         :return:
         """
-
-        z_list, a_list, _, _ = self.forwoard_propagation(parameters, X, activation=self.activation,
+        z_list, a_list, _, _, _ = self.forwoard_propagation(parameters, X, activation=self.activation,
+                                                         bn_param=self.bn_param,
+                                                         use_batchnorm=self.use_batchnorm,
                                                          mode='inference')  # 前向传播
 
         p = a_list[-1]
@@ -1348,12 +1503,13 @@ class Test:
                                   reg_lambda=0.1,
                                   use_reg=0,
                                   keep_prob=0.8,
-                                  use_dropout=True,
+                                  use_dropout=False,
+                                  use_batchnorm=True,
                                   model_path='model/Mnist.model',
                                   use_pre_train=False)
 
-        loss_list = clf.fit(X=X, y=y, init_mode='Xavier',layers_dims=[784, 200, 50, 10], mini_batch_size=640, optimize_mode='Adam',
-                            max_iter=100, learning_rate=0.01, print_log=True, print_log_step=10)
+        loss_list = clf.fit(X=X, y=y, init_mode='Xavier',layers_dims=[784, 200, 50, 10], mini_batch_size=512, optimize_mode='Adam',
+                            max_iter=40, learning_rate=0.01, print_log=True, print_log_step=10)
 
         # 结束时间
         end = time.time()
@@ -1381,7 +1537,6 @@ class Test:
 
         # 读取预训练好的模型, 并进行推理
         clf_pre_train = MLP_MultiClassifier(
-            K=K,
             model_path='model/Mnist.model',
             use_pre_train=True)
 

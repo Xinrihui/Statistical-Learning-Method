@@ -52,7 +52,7 @@ class Optimizer:
         """
         pass
 
-    def update_parameters(self, learning_rate, parameters, grad_W_list, grad_b_list,**kwargs):
+    def update_parameters(self, learning_rate, parameters, grad_W_list, grad_b_list,grad_gama_list,grad_beta_list,**kwargs):
         """
         根据反向传播计算得到梯度信息 更新 模型参数
         :param learning_rate:
@@ -78,7 +78,7 @@ class BGDOptimizer(Optimizer):
         return batches
 
 
-    def update_parameters(self, learning_rate, parameters, grad_W_list, grad_b_list,**kwargs):
+    def update_parameters(self, learning_rate, parameters, grad_W_list, grad_b_list,grad_gama_list,grad_beta_list,**kwargs):
         """
         根据反向传播计算得到梯度信息 更新 模型参数
 
@@ -91,12 +91,18 @@ class BGDOptimizer(Optimizer):
         W_list = parameters['W']
         b_list = parameters['b']
 
+        gama_list = parameters['gama']
+        beta_list = parameters['beta']
+
         L = len(W_list)  # MLP 的层数
 
         for l in range(L):  # 遍历输入层, 隐藏层和输入层 l = 0 ,...,L-1
 
             W_list[l] -= learning_rate * grad_W_list[l]
             b_list[l] -= learning_rate * grad_b_list[l]
+
+            gama_list[l] -= learning_rate * grad_gama_list[l]
+            beta_list[l] -= learning_rate * grad_beta_list[l]
 
         return parameters
 
@@ -157,7 +163,7 @@ class MinBatchOptimizer(Optimizer):
         return self.random_mini_batches(X=X, y_onehot=y_onehot, mini_batch_size=mini_batch_size)
 
 
-    def update_parameters(self, learning_rate, parameters, grad_W_list, grad_b_list,**kwargs):
+    def update_parameters(self, learning_rate, parameters, grad_W_list, grad_b_list,grad_gama_list,grad_beta_list,**kwargs):
         """
         根据反向传播计算得到梯度信息 更新 模型参数
 
@@ -169,6 +175,9 @@ class MinBatchOptimizer(Optimizer):
         """
         W_list = parameters['W']
         b_list = parameters['b']
+
+        gama_list = parameters['gama']
+        beta_list = parameters['beta']
 
         L = len(W_list)  # MLP 的层数
 
@@ -177,16 +186,20 @@ class MinBatchOptimizer(Optimizer):
             W_list[l] -= learning_rate * grad_W_list[l]
             b_list[l] -= learning_rate * grad_b_list[l]
 
+            gama_list[l] -= learning_rate * grad_gama_list[l]
+            beta_list[l] -= learning_rate * grad_beta_list[l]
+
+
         return parameters
 
 
 class MomentumOptimizer(MinBatchOptimizer):
 
-    def __init__(self, parameters, beta=0.9):
+    def __init__(self, parameters, beta1=0.9):
         """
 
         :param parameters:
-        :param beta: 相当于定义了计算指数加权平均数时的窗口大小
+        :param beta1: 相当于定义了计算指数加权平均数时的窗口大小
 
         eg.
         beta=0.5  窗口大小为: 1/(1-beta) = 2
@@ -195,25 +208,40 @@ class MomentumOptimizer(MinBatchOptimizer):
 
         """
 
-        self.beta = beta
+        self.beta1 = beta1
 
         W_list = parameters['W']
         b_list = parameters['b']
+
+        gama_list = parameters['gama']
+        beta_list = parameters['beta']
 
         L = len(W_list)  # MLP 的层数
 
         v_W_list = []  #
         v_b_list = []  #
 
+        v_gama_list = []  #
+        v_beta_list = []  #
+
+
         for l in range(L):  # 遍历输入层, 隐藏层和输入层 l = 0 ,...,L-1
 
             v_W_list.append(np.zeros(np.shape(W_list[l])))
             v_b_list.append(np.zeros(np.shape(b_list[l])))
 
+            v_gama_list.append(np.zeros(np.shape(gama_list[l])))
+            v_beta_list.append(np.zeros(np.shape(beta_list[l])))
+
+
         self.v_W_list = v_W_list
         self.v_b_list = v_b_list
 
-    def update_parameters(self, learning_rate, parameters, grad_W_list, grad_b_list,**kwargs):
+        self.v_gama_list = v_gama_list
+        self.v_beta_list = v_beta_list
+
+
+    def update_parameters(self, learning_rate, parameters, grad_W_list, grad_b_list,grad_gama_list,grad_beta_list,**kwargs):
         """
         根据反向传播计算得到梯度信息 更新 模型参数
 
@@ -226,15 +254,25 @@ class MomentumOptimizer(MinBatchOptimizer):
         W_list = parameters['W']
         b_list = parameters['b']
 
+        gama_list = parameters['gamma']
+        beta_list = parameters['beta']
+
         L = len(W_list)  # MLP 的层数
 
         for l in range(L):  # 遍历输入层, 隐藏层和输入层 l = 0 ,...,L-1
 
-            self.v_W_list[l] = self.beta * self.v_W_list[l] + (1 - self.beta) * grad_W_list[l]
-            self.v_b_list[l] = self.beta * self.v_b_list[l] + (1 - self.beta) * grad_b_list[l]
+            self.v_W_list[l] = self.beta1 * self.v_W_list[l] + (1 - self.beta1) * grad_W_list[l]
+            self.v_b_list[l] = self.beta1 * self.v_b_list[l] + (1 - self.beta1) * grad_b_list[l]
+
+            self.v_gama_list[l] = self.beta1 * self.v_gama_list[l] + (1 - self.beta1) * grad_gama_list[l]
+            self.v_beta_list[l] = self.beta1 * self.v_beta_list[l] + (1 - self.beta1) * grad_beta_list[l]
+
 
             W_list[l] -= learning_rate * self.v_W_list[l]
             b_list[l] -= learning_rate * self.v_b_list[l]
+
+            gama_list[l] -= learning_rate * self.v_gama_list[l]
+            beta_list[l] -= learning_rate * self.v_beta_list[l]
 
         return parameters
 
@@ -266,32 +304,50 @@ class AdamOptimizer(MinBatchOptimizer):
         W_list = parameters['W']
         b_list = parameters['b']
 
+        gama_list = parameters['gama']
+        beta_list = parameters['beta']
+
         L = len(W_list)  # MLP 的层数
 
         # 参数的一阶矩, 体现惯性保持
         m_W_list=[]
         m_b_list = []
+        m_gama_list=[]
+        m_beta_list = []
 
         # 参数的二阶矩, 体现环境感知
         v_W_list = []
         v_b_list = []
+        v_gama_list = []
+        v_beta_list = []
 
         for l in range(L):  # 遍历输入层, 隐藏层和输入层 l = 0 ,...,L-1
 
             m_W_list.append(np.zeros(np.shape(W_list[l])))
             m_b_list.append(np.zeros(np.shape(b_list[l])))
 
+            m_gama_list.append(np.zeros(np.shape(gama_list[l])))
+            m_beta_list.append(np.zeros(np.shape(beta_list[l])))
+
             v_W_list.append(np.zeros(np.shape(W_list[l])))
             v_b_list.append(np.zeros(np.shape(b_list[l])))
 
+            v_gama_list.append(np.zeros(np.shape(gama_list[l])))
+            v_beta_list.append(np.zeros(np.shape(beta_list[l])))
+
+
         self.m_W_list = m_W_list
         self.m_b_list = m_b_list
+        self.m_gama_list = m_gama_list
+        self.m_beta_list = m_beta_list
 
         self.v_W_list = v_W_list
         self.v_b_list = v_b_list
+        self.v_gama_list = v_gama_list
+        self.v_beta_list = v_beta_list
 
 
-    def update_parameters(self, learning_rate, parameters, grad_W_list, grad_b_list,t=0,use_bias_correct=False):
+    def update_parameters(self, learning_rate, parameters, grad_W_list, grad_b_list,grad_gama_list,grad_beta_list,t=0,use_bias_correct=False):
         """
         根据反向传播计算得到梯度信息 更新 模型参数
 
@@ -308,6 +364,9 @@ class AdamOptimizer(MinBatchOptimizer):
         W_list = parameters['W']
         b_list = parameters['b']
 
+        gama_list = parameters['gama']
+        beta_list = parameters['beta']
+
         L = len(W_list)  # MLP 的层数
 
         for l in range(L):  # 遍历输入层, 隐藏层和输入层 l = 0 ,...,L-1
@@ -316,9 +375,15 @@ class AdamOptimizer(MinBatchOptimizer):
             self.m_W_list[l] = self.beta1 * self.m_W_list[l] + (1-self.beta1)*grad_W_list[l]
             self.m_b_list[l] = self.beta1 * self.m_b_list[l] + (1 -self.beta1) * grad_b_list[l]
 
+            self.m_gama_list[l] = self.beta1 * self.m_gama_list[l] + (1 - self.beta1) * grad_gama_list[l]
+            self.m_beta_list[l] = self.beta1 * self.m_beta_list[l] + (1 - self.beta1) * grad_beta_list[l]
+
             # 二阶矩
             self.v_W_list[l] = self.beta2 * self.v_W_list[l] + (1-self.beta2)* np.square(grad_W_list[l])
             self.v_b_list[l] = self.beta2 * self.v_b_list[l] + (1 -self.beta2) * np.square(grad_b_list[l])
+
+            self.v_gama_list[l] = self.beta2 * self.v_gama_list[l] + (1-self.beta2)* np.square(grad_gama_list[l])
+            self.v_beta_list[l] = self.beta2 * self.v_beta_list[l] + (1 -self.beta2) * np.square(grad_beta_list[l])
 
             # 偏差修正 TODO: 会造成计算溢出,模型不收敛,原因未知
             if use_bias_correct:
@@ -326,13 +391,23 @@ class AdamOptimizer(MinBatchOptimizer):
                 z2 = 1 - (self.beta2**t)
                 self.m_W_list[l] = self.m_W_list[l] / z1
                 self.m_b_list[l] = self.m_b_list[l] / z1
+                self.m_gama_list[l] = self.m_gama_list[l] / z1
+                self.m_beta_list[l] = self.m_beta_list[l] / z1
+
                 self.v_W_list[l] = self.v_W_list[l] / z2
                 self.v_b_list[l] = self.v_b_list[l] / z2
+                self.v_gama_list[l] = self.v_gama_list[l] / z2
+                self.v_beta_list[l] = self.v_beta_list[l] / z2
+
 
             # 一阶矩 二阶矩融合
             W_list[l] -= ((learning_rate * self.m_W_list[l]) / np.sqrt(self.v_W_list[l]+self.epsilon))
 
             b_list[l] -= ((learning_rate * self.m_b_list[l]) / np.sqrt(self.v_b_list[l]+self.epsilon))
+
+            gama_list[l] -= ((learning_rate * self.m_gama_list[l]) / np.sqrt(self.v_gama_list[l]+self.epsilon))
+
+            beta_list[l] -= ((learning_rate * self.m_beta_list[l]) / np.sqrt(self.v_beta_list[l]+self.epsilon))
 
         return parameters
 
