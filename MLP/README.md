@@ -344,7 +344,7 @@ weighted avg       0.91      0.92      0.91      1000
     开启 L2 正则化, reg_lambda=0.1
     开启 dropout 正则化,keep_prob=0.8
 
-    使用 Momentum 梯度下降,beta=0.9
+    使用 Momentum 梯度下降,beta1=0.9
     mini_batch_size = 640
     max_iter=200,
     learning_rate=0.5
@@ -444,29 +444,5 @@ weighted avg       0.91      0.92      0.91      1000
 
 ```
 
-```
-   15.Mnist 数据集(多分类)
-    n_train = 60000
-    n_test = 10000
+对 BN 进行的详细实验位于 test/BN 中，从中可以看出在激活函数为 sigmoid 时, BN 对于训练时模型的收敛有很好的效果, 可以避免梯度消失和梯度爆炸, 与 Xavier 初始化有类似的效果
 
-    MLP 各个层的维度: layers_dims=[784,200,50,10],
-    使用 relu 激活函数,
-    采用 Xavier参数随机初始化,
-    关闭 dropout 正则化
-    开启 batchnorm , beta1 = 0.9
-
-    使用 MinBatch 梯度下降,
-    mini_batch_size = 512
-    max_iter=40,
-    learning_rate=0.01
-
-    正确率(测试集)： 0.95
-    train accuracy :0.96
-    训练时长： 115 s
-
-    epcho: 0 , loss:0.6794630046009313
-    epcho: 10 , loss:0.2413543431679431
-    epcho: 20 , loss:0.17893451362036314
-    epcho: 30 , loss:0.2736255554879355
-
-```

@@ -1,4 +1,4 @@
-# 李航老师《统计学习方法》的相关算法实现
+# 李航老师《统计学习方法》和 深度学习 的相关算法实现
 
 纯手写(模型实现代码仅使用 numpy 库), 并且和 sklearn 或者是和其他机器学习库中的相关模型进行性能对比
 
@@ -54,10 +54,13 @@ xgboost 单线程版本v2
 
 5.概率图模型: NaiveBayes, GMM, clustering( K-means, Hierachical ) ,HMM , LinearCRF
 
+6.降维: PCA , LDA
 
 ## 第四阶段
 
-6.神经网络模型: 线性模型( LinerRegression, logisticRegression ), MLP( 二分类, 多分类 )
+7.神经网络模型: 线性模型( LinerRegression, logisticRegression ), MLP( 二分类, 多分类 )
+
+8.深度学习模型: CNN, RNN, LSTM
 
 
 ## 重要
@@ -72,3 +75,9 @@ xgboost 单线程版本v2
 ## Ref
 
 https://github.com/Dod-o/Statistical-Learning-Method_Code
+
+https://github.com/dmlc/xgboost
+
+https://github.com/lightaime/cs231n
+
+https://github.com/enggen/Deep-Learning-Coursera

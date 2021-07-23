@@ -10,6 +10,9 @@ class BatchNormalization:
     Author: xrh
     Date: 2021-07-17
 
+    ref:
+    https://zhuanlan.zhihu.com/p/45614576
+
     """
 
     @staticmethod
@@ -30,6 +33,8 @@ class BatchNormalization:
         beta1 = bn_param.get('beta1', 0.9)
 
         n_current, N = np.shape(x)
+
+        cache = {}
 
         # 均值和方差的指数加权平均数, 若 bn_param 中没有, 则初始化为 0
         average_mean = bn_param.get('average_mean'+str(l), np.zeros((n_current,1), dtype=x.dtype))
@@ -53,19 +58,21 @@ class BatchNormalization:
             bn_param['average_mean'+str(l)] = average_mean
             bn_param['average_var'+str(l)] = average_var
 
+            cache = {'x': x, 'mean': mean, 'std': std, 'x_ba': x_ba, 'y': y, 'z_ba': y}
+
 
         else: #  mode == 'inference': #推理模式
 
             #  推理时使用 指数加权平均数
-            mean = bn_param['average_mean'+str(l)]
-            var = bn_param['average_var'+str(l)]
+            mean = average_mean
+            var = average_var
+
             std = np.sqrt(var + epsilon)
 
             x_ba = (x - mean) / std
             y = gama * x_ba + beta
 
         out = y
-        cache = {'x':x,'mean':mean,'std':std,'x_ba':x_ba,'y':y,'z_ba': y}
 
         return cache,out
 
@@ -80,7 +87,7 @@ class BatchNormalization:
         :param grad_z_ba: shape: (n_current,N)
 
         :param cache_bn:
-        cache_bn = cache = {'x':x,'mean':mean,'std ':std,'x_ba':x_ba,'y':y,'z_ba': y}
+        cache_bn = cache = {'x':x,'mean':mean,'std':std,'x_ba':x_ba,'y':y,'z_ba': y}
 
         :return:
         """

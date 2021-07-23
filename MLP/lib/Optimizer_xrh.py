@@ -254,7 +254,7 @@ class MomentumOptimizer(MinBatchOptimizer):
         W_list = parameters['W']
         b_list = parameters['b']
 
-        gama_list = parameters['gamma']
+        gama_list = parameters['gama']
         beta_list = parameters['beta']
 
         L = len(W_list)  # MLP 的层数

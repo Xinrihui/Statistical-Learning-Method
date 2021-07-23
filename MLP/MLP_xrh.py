@@ -21,7 +21,7 @@ import matplotlib as mpl
 
 from planar_utils import plot_decision_boundary, load_planar_dataset, load_extra_datasets
 
-from lib.Normalize_xrh import *
+from lib.Normalizer_xrh import *
 
 from lib.Activation_xrh import *
 from lib.Batchnormalization_xrh import *
@@ -1475,7 +1475,7 @@ class Test:
         :return:
         """
 
-        binaryzation = True  # 是否对样本特征进行二值化处理
+        binaryzation = False  # 是否对样本特征进行二值化处理
 
         # 获取训练集
         trainDataList, trainLabelList = self.loadData('../dataset/Mnist/mnist_train.csv', n=n_train,
@@ -1493,7 +1493,7 @@ class Test:
 
         start = time.time()
 
-        # X = Normalize.tow_norm_normalize(trainDataArr) # 二范数归一化
+        # X = Normalizer.tow_norm_normalize(trainDataArr) # 二范数归一化
 
         X = trainDataArr
         y = trainLabelArr
@@ -1508,8 +1508,8 @@ class Test:
                                   model_path='model/Mnist.model',
                                   use_pre_train=False)
 
-        loss_list = clf.fit(X=X, y=y, init_mode='Xavier',layers_dims=[784, 200, 50, 10], mini_batch_size=512, optimize_mode='Adam',
-                            max_iter=40, learning_rate=0.01, print_log=True, print_log_step=10)
+        loss_list = clf.fit(X=X, y=y, init_mode='Xavier',layers_dims=[784,100,100,100,100,10], mini_batch_size=256, optimize_mode='Adam',
+                            max_iter=50, learning_rate=0.01, print_log=True, print_log_step=10)
 
         # 结束时间
         end = time.time()

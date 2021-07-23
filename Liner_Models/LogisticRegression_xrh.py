@@ -239,8 +239,8 @@ class LR_MultiClassifier:
     参数: use_reg=2, reg_lambda=0.1,max_iter=50
     训练集数量：60000
     测试集数量：10000
-    正确率：
-    训练时长： s
+    正确率： 0.84
+    训练时长： 30s
 
     """
 
