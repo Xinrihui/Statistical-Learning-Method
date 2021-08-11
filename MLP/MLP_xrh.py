@@ -1099,7 +1099,7 @@ class MLP_MultiClassifier:
         initializer = Initializer()
         parameters = initializer.initialize_parameters(layers_dims)
 
-        # 将标签y one-hot 化, shape: (K,N)
+        # 将标签 y one-hot 化, shape: (K,N)
         y_onehot = (y == np.array(range(self.K)).reshape(-1, 1)).astype(
             np.int8)
 

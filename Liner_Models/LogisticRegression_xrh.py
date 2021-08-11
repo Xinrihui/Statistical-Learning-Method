@@ -232,7 +232,7 @@ class LR_MultiClassifier:
     Date: 2021-07-05
 
     ref:
-    统计学习方法 第二版》李航
+    《统计学习方法 第二版》李航
 
     test1: 多分类任务
     数据集：Mnist

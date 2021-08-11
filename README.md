@@ -1,6 +1,6 @@
 # 李航老师《统计学习方法》和 深度学习 的相关算法实现
 
-纯手写(模型实现代码仅使用 numpy 库), 并且和 sklearn 或者是和其他机器学习库中的相关模型进行性能对比
+纯手写(模型实现仅使用 numpy 库), 并且和 sklearn 或者 其他机器学习库中的相关模型进行效果比较
 
 ## 第一阶段
 
@@ -47,7 +47,7 @@ xgboost 单线程版本v2
 
  a. 在开启新的进程时, 起码要把训练数据复制一份到新的进程中, 要考虑复制数据的开销
 
- b. 若不复制数据, 使用共享内存, 经过试验, 发现共享内存效率一般,多进程的效率没有比单进程高多少
+ b. 若不复制数据, 使用共享内存, 但是我们发现共享内存效率一般, 估计多进程的效率没有比单进程高多少
 
 
 ## 第三阶段
@@ -58,7 +58,7 @@ xgboost 单线程版本v2
 
 ## 第四阶段
 
-7.神经网络模型: 线性模型( LinerRegression, logisticRegression ), MLP( 二分类, 多分类 )
+7.神经网络模型: 线性模型( LinerRegression, logisticRegression ), MLP( 二分类, 多分类 ),Xavier , dropout, Momentum, Adam, BatchNormalization
 
 8.深度学习模型: CNN, RNN, LSTM
 
