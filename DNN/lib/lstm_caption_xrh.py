@@ -3,16 +3,17 @@
 
 import numpy as np
 
-from rnn_layers_xrh import *
+from lstm_layers_xrh import *
+
 from Initializer_xrh import *
 
 from utils_xrh import *
 
 import pickle
 
-class CaptionRNN:
+class CaptionLSTM:
     """
-    基础的循环神经网络,
+    LSTM 循环神经网络,
 
     适用于构建
     (1) 语言模型 (language model)
@@ -26,12 +27,12 @@ class CaptionRNN:
     图片二次提取特征后的维度为 n_h
 
     Author: xrh
-    Date: 2021-07-30
+    Date: 2021-08-21
 
     """
 
     def __init__(self, word_to_idx=None, feature_dim=512,wordvec_dim=256, hidden_dim=128, dtype=np.float32,
-                      model_path = 'model/rnn_caption.model',
+                      model_path = 'model/lstm_caption.model',
                       use_pre_train = True
 
     ):
@@ -73,23 +74,44 @@ class CaptionRNN:
             self.class_num = vocab_size # 语言模型的输出为词表中单词出现的概率
 
             # 需要 Xavier 初始化的参数:
-            # U shape(n_h,m), W shape(n_h, n_h), V shape(class_num,n_h) , W_pict shape(n_h,n_p)
+            # V shape(class_num,n_h) , W_pict shape(n_h,n_p),
+            # U_f shape(n_h,m), W_f shape(n_h, n_h)
+            # U_i shape(n_h,m), W_i shape(n_h, n_h)
+            # U_a shape(n_h,m), W_a shape(n_h, n_h)
+            # U_o shape(n_h,m), W_o shape(n_h, n_h)
+
             xavier = XavierInitializer()
-            U,W,V,W_pict = xavier.initialize_parameters([(self.n_h,self.m),(self.n_h, self.n_h),(self.class_num,self.n_h),(self.n_h,self.n_p)])
+            V,W_pict,U_f,W_f,U_i,W_i,U_a,W_a,U_o,W_o = xavier.initialize_parameters([(self.class_num,self.n_h),(self.n_h, self.n_p),
+                                                                                     (self.n_h,self.m),(self.n_h,self.n_h),
+                                                                                     (self.n_h, self.m), (self.n_h, self.n_h),
+                                                                                     (self.n_h, self.m), (self.n_h, self.n_h),
+                                                                                     (self.n_h, self.m), (self.n_h, self.n_h),
+                                                                                     ])
 
             # 需要 0初始化的参数:
-            # b_z shape(n_h,1), b_o shape(class_num,1) , b_pict shape(n_h,1)
+            # b_y shape(class_num,1), b_pict shape(n_h,1),
+            # b_f shape(n_h,1), b_i shape(n_h,1) , b_a shape(n_h,1) , b_o shape(n_h,1)
             zero = ZeroInitializer()
-            b_z,b_o,b_pict = zero.initialize_parameters([(self.n_h,1),(self.class_num, 1),(self.n_h,1)])
+            b_y, b_pict, b_f, b_i, b_a, b_o = zero.initialize_parameters([(self.class_num,1),(self.n_h, 1),
+                                                                         (self.n_h,1),(self.n_h,1),(self.n_h,1),(self.n_h,1)
+                                                                         ])
 
             # 需要 随机初始化的参数:
             # W_embed shape (vocab_size, m)
             rand = RandomInitializer()
             W_embed = rand.initialize_parameters([(vocab_size, self.m)])[0]
 
-            self.params = {"U":U,"W":W,"V":V,"b_z":b_z,"b_o":b_o,"W_embed":W_embed,"W_pict":W_pict,"b_pict":b_pict}
+            self.params = {"V":V,"W_pict":W_pict,
+                           "U_f":U_f,"W_f":W_f,
+                           "U_i":U_i,"W_i":W_i,
+                           "U_a":U_a,"W_a":W_a,
+                           "U_o": U_o, "W_o": W_o,
+                           "b_y": b_y, "b_pict": b_pict,
+                           "b_f": b_f, "b_i": b_i,"b_a": b_a, "b_o": b_o,
+                           "W_embed": W_embed
+                           }
 
-            self.rnn_layer = RNNLayer()
+            self.rnn_layer = LSTMLayer()
 
             # 将所有的参数转换为 dtype 类型
             for k, v in self.params.items():
@@ -103,7 +125,7 @@ class CaptionRNN:
 
     def save(self, model_dir):
         """
-        保存训练好的 MLP 模型
+        保存训练好的模型
 
         :param train_data_dir:
         :return:
@@ -134,7 +156,7 @@ class CaptionRNN:
 
     def load(self, file_path):
         """
-        读取预训练的 MLP 模型
+        读取预训练的模型
 
         :param file_path:
         :return:
@@ -203,35 +225,37 @@ class CaptionRNN:
         # images_feature = images_feature.T # (N,n_p)
 
         # 图片嵌入层
-        a0, cache_pict = self.rnn_layer.picture_embedding_forward(parameters=self.params, origin_feature=images_feature)
-        # a0 shape(n_h,N)
+        h0, cache_pict = self.rnn_layer.picture_embedding_forward(parameters=self.params, origin_feature=images_feature)
+        # h0 shape(n_h,N)
 
         # 中间层
-        a_list, cache_list_mid = self.rnn_layer.middle_forwoard_propagation(parameters=self.params, x_list=x_list, a_init=a0)
-        # a_list shape (N,T,n_h)
+        o_list, C_list, h_list, cache_list_mid = self.rnn_layer.middle_forwoard_propagation(parameters=self.params, x_list=x_list, h_init=h0)
+        # h_list shape (N,T,n_h)
 
         # 输出层
-        o_list,y_ba_list,cache_out = self.rnn_layer.temporal_affine_forward(parameters=self.params, a_list=a_list)
-        # o_list shape (N, T, class_num)
+        z_y_list, y_ba_list, cache_out = self.rnn_layer.temporal_affine_forward(parameters=self.params, o_list=o_list, C_list=C_list, h_list=h_list)
+        # z_y_list shape (N, T, class_num)
 
         # 样本标签的 one-hot 化 shape (N,T-1) ->  (N,T-1,class_num)
         batch_out_onehot = Utils.convert_to_one_hot(x=batch_out,class_num=self.class_num)  # shape (N,T-1,class_num)
 
         # 计算损失函数
-        loss,grad_o_list = self.rnn_layer.multi_classify_loss_func(o_list=o_list,y_ba_list=y_ba_list,y_onehot_list=batch_out_onehot,mask=mask)
+        loss, grad_z_y_list = self.rnn_layer.multi_classify_loss_func(z_y_list=z_y_list, y_ba_list=y_ba_list, y_onehot_list=batch_out_onehot, mask=mask)
 
         #计算梯度
         # 输出层
-        outLayer_grad_a_list,grad_dict_out = self.rnn_layer.temporal_affine_bakward(grad_o_list=grad_o_list,cache=cache_out)
+        outLayer_grad_C_list, outLayer_grad_h_list, grad_dict_out = self.rnn_layer.temporal_affine_bakward(grad_z_y_list=grad_z_y_list,cache=cache_out)
 
         # 中间层
-        grad_a_pre,grad_x_list,grad_dict_middle = self.rnn_layer.middle_bakwoard_propagation(outLayer_grad_a_list=outLayer_grad_a_list,cache_list=cache_list_mid)
+        grad_h_pre, grad_x_list, grad_dict_middle = self.rnn_layer.middle_bakwoard_propagation(outLayer_grad_C_list=outLayer_grad_C_list,
+                                                                                             outLayer_grad_h_list=outLayer_grad_h_list,
+                                                                                             cache_list=cache_list_mid)
 
         # 词嵌入层
         grad_dict_embed = self.rnn_layer.word_embedding_backward(grad_x_list=grad_x_list, cache=cache_embed)
 
         # 图片嵌入层
-        grad_dict_pict = self.rnn_layer.picture_embedding_backward(grad_a0=grad_a_pre, cache=cache_pict)
+        grad_dict_pict = self.rnn_layer.picture_embedding_backward(grad_a0=grad_h_pre, cache=cache_pict)
 
         # 各个层梯度合并
         grads = {**grad_dict_out, **grad_dict_middle, **grad_dict_embed, **grad_dict_pict}
@@ -262,8 +286,9 @@ class CaptionRNN:
         caption = np.zeros((N,caption_length),dtype=np.int32)
 
         # 图片嵌入层
-        a0, _ = self.rnn_layer.picture_embedding_forward(parameters=self.params, origin_feature=images_feature)
-        # a0 shape(n_h,N)
+        h0, _ = self.rnn_layer.picture_embedding_forward(parameters=self.params, origin_feature=images_feature)
+        # h0 shape(n_h,N)
+        C0 = None
 
         for t in range(caption_length): # 遍历所有时间步
 
@@ -272,17 +297,17 @@ class CaptionRNN:
             # x_t shape (N, T=1, m)
 
             # 中间层
-            a_t, _ = self.rnn_layer.middle_forwoard_propagation(parameters=self.params, x_list=x_t, a_init=a0)
-            # a_t shape (N,T=1,n_h)
+            o_t, C_t, h_t, _ = self.rnn_layer.middle_forwoard_propagation(parameters=self.params, x_list=x_t, C_init=C0, h_init=h0)
+            # h_t shape (N,T=1,n_h)
+            # C_t shape (N,T=1,n_h)
 
-            # a_t 要输入到下一个时间步
-            a0 = a_t.reshape(N,self.n_h).T # shape(n_h,N)
+            # C_t,h_t 要输入到下一个时间步
+            h0 = h_t.reshape(N,self.n_h).T # shape(n_h,N)
+            C0 = C_t.reshape(N, self.n_h).T  # shape(n_h,N)
 
             # 输出层
-            _, y_ba_t, _ = self.rnn_layer.temporal_affine_forward(parameters=self.params, a_list=a_t)
+            _, y_ba_t, _ = self.rnn_layer.temporal_affine_forward(parameters=self.params, o_list=o_t, C_list=C_t, h_list=h_t)
             #  y_ba_t  shape (N, T=1, class_num)
-
-            # y_ba_t = y_ba_t.reshape((N,self.class_num)) # shape (N, class_num)
 
             y_ba_t = np.squeeze(y_ba_t) # shape (N, class_num)
 
@@ -296,43 +321,4 @@ class CaptionRNN:
         return caption
 
 
-class UnitTest:
-    """
-    单元测试
-
-    """
-
-    def test_lossfunc(self):
-
-        N, D, W, H = 10, 20, 30, 40
-        word_to_idx = {'<NULL>': 0, 'cat': 2, 'dog': 3}
-        V = len(word_to_idx)
-        T = 13
-
-        model = CaptionRNN(
-            word_to_idx=word_to_idx,
-            feature_dim=D,
-            wordvec_dim=W,
-            hidden_dim=H,
-            dtype=np.float64)
-
-        # Set all model parameters to fixed values
-        for k, v in model.params.items():
-            model.params[k] = np.linspace(-1.4, 1.3, num=v.size).reshape(*v.shape)
-
-        features = np.linspace(-1.5, 0.3, num=(N * D)).reshape(N, D)
-        captions = (np.arange(N * T) % V).reshape(N, T)
-
-        loss, grads = model.fit_batch(batch_sentence=captions, images_feature=features)
-        expected_loss = 9.83235591003
-
-        print('loss: ', loss)
-        print('expected loss: ', expected_loss)
-        print('difference: ', abs(loss - expected_loss))
-
-if __name__ == '__main__':
-
-    test = UnitTest()
-
-    test.test_lossfunc()
 

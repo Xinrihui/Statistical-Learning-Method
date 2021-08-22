@@ -60,7 +60,7 @@ xgboost 单线程版本v2
 
 7.神经网络模型: 线性模型( LinerRegression, logisticRegression ), MLP( 二分类, 多分类 ),Xavier , dropout, Momentum, Adam, BatchNormalization
 
-8.深度学习模型: CNN, RNN, LSTM
+8.深度学习模型(/DNN): CNN, RNN, LSTM
 
 
 ## 重要
