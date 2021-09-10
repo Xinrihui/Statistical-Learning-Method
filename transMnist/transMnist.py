@@ -30,6 +30,10 @@ def convert(imgf, labelf, outf, n):
     l.close()
 
 if __name__ == '__main__':
+
+    # MNIST数据集(Mixed National Institute of Standards and Technology database)是美国国家标准与技术研究院收集整理的大型手写数字数据库,
+    # 包含60,000个示例的训练集以及10,000个示例的测试集.
+
     convert(".\Mnist\\t10k-images.idx3-ubyte", ".\Mnist\\t10k-labels.idx1-ubyte",
             ".\Mnist\\mnist_test.csv", 10000)
     convert(".\Mnist\\train-images.idx3-ubyte", ".\Mnist\\train-labels.idx1-ubyte",

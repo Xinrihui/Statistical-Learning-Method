@@ -5,7 +5,7 @@ from deprecated import deprecated
 
 import numpy as np
 
-from Activation_xrh import Activation
+from activation_xrh import Activation
 
 from gradient_check_xrh import *
 
@@ -29,6 +29,9 @@ class LSTMLayer(RNNLayer):
 
     Author: xrh
     Date: 2021-08-21
+
+    ref:
+    https://www.cnblogs.com/pinard/p/6519110.html
 
     """
 
@@ -263,11 +266,8 @@ class LSTMLayer(RNNLayer):
 
         return o_list, C_list, h_list, cache_list
 
-    def middle_bakwoard_propagation(self, outLayer_grad_C_list,
-                                          outLayer_grad_h_list,
-                                          cache_list,
-                                          activation='tanh'
-                                    ):
+    def middle_bakwoard_propagation(self, outLayer_grad_C_list, outLayer_grad_h_list, cache_list,activation='tanh'):
+
         """
          LSTM 中间层的后向传播算法
 

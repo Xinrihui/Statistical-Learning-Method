@@ -4,7 +4,7 @@
 import numpy as np
 
 from rnn_layers_xrh import *
-from Initializer_xrh import *
+from initializer_xrh import *
 
 from utils_xrh import *
 

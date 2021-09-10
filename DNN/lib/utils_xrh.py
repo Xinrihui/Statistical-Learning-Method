@@ -6,7 +6,7 @@ import numpy as np
 class Utils:
 
     @staticmethod
-    def convert_to_one_hot(x, class_num,dtype=np.int32):
+    def convert_to_one_hot(x, class_num, dtype=np.int32):
         """
         将标签值转为 one-hot 向量
 
@@ -33,7 +33,7 @@ class Test:
 
         x1 = np.array([1, 2, 3, 4])
         class_num = 5
-        print('x1 one-hot :',Utils.convert_to_one_hot(x1, class_num)) # shape: (N,class_num)
+        print('x1 one-hot :',Utils.convert_to_one_hot(x1, class_num))  # shape: (N,class_num)
 
         N,T,class_num = 5,3,4
         x2 = np.zeros((N, T)).astype(np.int8)

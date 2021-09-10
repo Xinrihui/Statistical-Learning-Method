@@ -5,7 +5,7 @@ import numpy as np
 
 from lstm_layers_xrh import *
 
-from Initializer_xrh import *
+from initializer_xrh import *
 
 from utils_xrh import *
 

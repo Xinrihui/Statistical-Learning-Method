@@ -5,7 +5,7 @@ from deprecated import deprecated
 
 import numpy as np
 
-from Activation_xrh import Activation
+from activation_xrh import Activation
 
 from gradient_check_xrh import *
 
