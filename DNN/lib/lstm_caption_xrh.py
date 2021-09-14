@@ -57,16 +57,16 @@ class CaptionLSTM:
         if not use_pre_train:  # 从头开始训练模型
 
             self.params = {}  # 模型参数(需要更新)
-            self.dtype = dtype # 模型参数的数据类型
+            self.dtype = dtype  # 模型参数的数据类型
 
-            self.word_to_idx = word_to_idx # 单词到单词标号的映射
-            self.idx_to_word = {i: w for w, i in word_to_idx.items()} # 单词标号到单词的映射
+            self.word_to_idx = word_to_idx  # 单词到单词标号的映射
+            self.idx_to_word = {i: w for w, i in word_to_idx.items()}  # 单词标号到单词的映射
 
             vocab_size = len(word_to_idx) # 词典的大小
 
-            self._null = word_to_idx['<NULL>'] # 空
-            self._start = word_to_idx.get('<START>', None) # 句子的开始
-            self._end = word_to_idx.get('<END>', None) # 句子的结束
+            self._null = word_to_idx['<NULL>']  # 空
+            self._start = word_to_idx.get('<START>', None)  # 句子的开始
+            self._end = word_to_idx.get('<END>', None)  # 句子的结束
 
             self.n_p = feature_dim
             self.n_h = hidden_dim

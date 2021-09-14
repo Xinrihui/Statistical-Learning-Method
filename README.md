@@ -54,13 +54,16 @@ xgboost 单线程版本v2
 
 5.概率图模型: NaiveBayes, GMM, clustering( K-means, Hierachical ) ,HMM , LinearCRF
 
-6.降维: PCA , LDA
+6.降维(子目录 /PCA_LDA): PCA , LDA
 
 ## 第四阶段
 
-7.神经网络模型: 线性模型( LinerRegression, logisticRegression ), MLP( 二分类, 多分类 ), Xavier, dropout, Momentum, Adam, BatchNormalization
+7. 线性模型(子目录 /Liner_Models): LinerRegression, logisticRegression
 
-8.深度学习模型(/DNN): CNN, RNN, LSTM
+8.神经网络模型(子目录 /MLP): MLP( 二分类, 多分类 ) 并在此基础上实现了神经网络性能优化,
+              包括: Xavier 初始化, dropout 正则化, BatchNormalization, 优化算法 Momentum,Adam
+
+9.深度学习模型(子目录 /DNN): CNN, RNN, LSTM
 
 
 ## 重要
