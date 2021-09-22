@@ -55,6 +55,7 @@ def load_coco_data(base_dir=BASE_DIR,
 
 
 def decode_captions(captions, idx_to_word):
+
     singleton = False
     if captions.ndim == 1:
         singleton = True
@@ -79,6 +80,7 @@ def sample_coco_minibatch(data, batch_size=100, split='train'):
 
     split_size = data['%s_captions' % split].shape[0]
     mask = np.random.choice(split_size, batch_size)
+
     captions = data['%s_captions' % split][mask]
     image_idxs = data['%s_image_idxs' % split][mask]
     image_features = data['%s_features' % split][image_idxs]

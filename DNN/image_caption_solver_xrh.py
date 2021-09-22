@@ -273,9 +273,11 @@ class Test:
         # 0. 了解数据集
         # data = load_coco_data(base_dir='../dataset/coco_captioning', pca_features=True)
 
-
-        # train_captions  (400135, 17) train 为训练集
+        # 训练集(train)
+        # train_captions  (400135, 17)
         # train_image_idxs  (400135,)  评论到图片的映射, 通过映射找到评论对应的图片向量
+        # train_features  (82783, 512) 向量化后的图片, 维度为 512
+
         # val_captions   (195954, 17)  val 为验证集
         # val_image_idxs  (195954,)
         # train_features  (82783, 512) 向量化后的图片, 维度为 512
@@ -300,7 +302,9 @@ class Test:
         np.random.seed(231)
 
         # 1.读取训练数据
-        small_data = load_coco_data(base_dir='../dataset/coco_captioning', max_train=50000)
+        # small_data = load_coco_data(base_dir='../dataset/coco_captioning', max_train=50000)
+
+        small_data = load_coco_data(base_dir='../dataset/coco_captioning', max_train=50)
 
         # 2. 训练模型
         lstm_model = CaptionLSTM(
@@ -316,8 +320,8 @@ class Test:
         solver = ImageCaptionSolver(lstm_model, small_data,
                                             model_path='model/lstm_caption.model',
                                             optimize_mode='Adam',
-                                            num_epochs=10,
-                                            batch_size=2048,
+                                            num_epochs=50,
+                                            batch_size=25,
                                             optim_config={
                                                 'learning_rate': 5e-3,
                                                 'bias_correct':False
@@ -327,14 +331,14 @@ class Test:
                                             )
 
 
-        # solver.fit()
+        solver.fit()
 
         # Plot the training losses
-        # plt.plot(solver.loss_history)
-        # plt.xlabel('Iteration')
-        # plt.ylabel('Loss')
-        # plt.title('Training loss history')
-        # plt.show()
+        plt.plot(solver.loss_history)
+        plt.xlabel('Iteration')
+        plt.ylabel('Loss')
+        plt.title('Training loss history')
+        plt.show()
 
         # 3.测试模型
 
@@ -346,7 +350,7 @@ class Test:
 
         split = 'train' # 训练数据集
 
-        minibatch = sample_coco_minibatch(small_data, split=split, batch_size=6) # 在 small_data 中随机采样
+        minibatch = sample_coco_minibatch(small_data, split=split, batch_size=4)  # 在 small_data 中随机采样
 
         origin_captions, features, urls = minibatch
         origin_captions = decode_captions(origin_captions, small_data['idx_to_word'])

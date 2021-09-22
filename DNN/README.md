@@ -12,7 +12,7 @@
 
 ### 1.2 实验结果
 
-    对 Microsoft COCO 数据集 中的所有图片用CNN进行特征提取, 并使用PCA 降维,本实验采用降维后的图片特征(n_p=512)作为模型的输入
+    对 Microsoft COCO 数据集 中的所有图片用CNN(VGG-16)进行特征提取, 并使用PCA 降维,本实验采用降维后的图片特征(n_p=512)作为模型的输入
 
 
 
@@ -28,7 +28,7 @@
 
 ### 3.1 模型设计
 
-    参考 LeNet-5
+    参考 LeNet-5 网络
 
     0. 图片输入层 'input'
         output: shape (N,1,28,28), 28*28=784
@@ -108,8 +108,11 @@ http://cs231n.stanford.edu/schedule.html
 
 ## Note
 
-Microsoft COCO 数据集下载 http://cs231n.stanford.edu/coco_captioning.zip
+1.Microsoft COCO 数据集
 
+stanford cs231n 预处理过的数据集下载 http://cs231n.stanford.edu/coco_captioning.zip
+
+标准的数据集下载 https://cocodataset.org/#download
 
 
 

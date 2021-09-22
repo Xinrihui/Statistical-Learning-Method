@@ -1,0 +1,15 @@
+(Iteration 1 / 100) loss: 79.780548
+E:\python package\python-project\统计学习方法\Statistical-Learning-Method_Code-master\DNN\lib\activation_xrh.py:46: RuntimeWarning: overflow encountered in exp
+  a = 1 / (1 + np.exp(-X))
+(Iteration 11 / 100) loss: 48.756276
+(Iteration 21 / 100) loss: 27.400418
+(Iteration 31 / 100) loss: 10.236165
+(Iteration 41 / 100) loss: 4.683548
+(Iteration 51 / 100) loss: 1.778859
+(Iteration 61 / 100) loss: 0.805288
+(Iteration 71 / 100) loss: 0.483478
+(Iteration 81 / 100) loss: 0.191757
+(Iteration 91 / 100) loss: 0.140919
+Save model successful!
+Load model successful!
+
