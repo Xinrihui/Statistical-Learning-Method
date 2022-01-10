@@ -1,21 +1,19 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 
-import numpy as np
 import time
 import os
 import pickle
-from deprecated import deprecated
 
 from sklearn import datasets
 from sklearn.datasets import load_boston
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 
-from updater_colmaker_xrh import *
-from activation_xrh import *
-from sparse_vector_xrh import *
-from utils_xrh import *
+from lib.updater_colmaker_xrh import *
+from lib.activation_xrh import *
+from lib.sparse_vector_xrh import *
+from lib.utils_xrh import *
 
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score
@@ -24,7 +22,6 @@ from sklearn.metrics import recall_score
 from sklearn.metrics import f1_score
 from sklearn.metrics import precision_recall_curve
 from sklearn.metrics import roc_curve
-from sklearn.metrics import auc
 
 
 class XGBoost:

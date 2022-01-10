@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 
-from param_xrh import *
+from lib.param_xrh import *
 
 
 class IncreIDGenerator:

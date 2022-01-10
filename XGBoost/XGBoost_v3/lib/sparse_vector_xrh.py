@@ -34,17 +34,12 @@ class DMatrix:
             feature = data_arr[:, i]  # 特征 i 拎出来 shape:(N,)
             feature_index = []
 
-            missing_value_index = []
-
             for rid in range(self.N):
 
                 if feature[rid] not in missing:  # 特征值 不在 缺失值集合中
                     feature_index.append((feature[rid], rid))  # (特征值, 样本标号)
-                # else:
-                #     missing_value_index.append(rid)
 
             # 按照特征值的大小排序
             sorted_feature_index = sorted(feature_index, key=lambda t: t[0])
 
             self.sorted_pages.append(sorted_feature_index)
-            # self.missing_value_pages.append(missing_value_index)

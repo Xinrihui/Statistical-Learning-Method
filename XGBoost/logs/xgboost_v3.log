@@ -1,0 +1,62 @@
+### 2.2 xgboost v3
+
+    test1: 回归任务
+    数据集：boston房价数据集
+    参数:
+        error_rate_threshold=0.01,
+        max_iter=100,
+        max_depth=3,
+        learning_rate=0.1,
+        gama=1.0,
+        reg_lambda=1.0
+    训练集数量：455
+    测试集数量：51
+    测试集的 MSE：10.9
+    模型训练时长：26s
+
+    test2: 二分类任务
+    数据集：Mnist
+    参数:
+      error_rate_threshold=0.01
+      max_iter=20,
+      max_depth=3,
+      gama=0.0,
+      reg_lambda=0.0,
+      learning_rate=1.0
+    训练集数量：6000
+    测试集数量：1000
+    正确率： 0.973
+    模型训练时长： 203s
+
+    对比对比陈天奇的 xgboost, 在同样的数据规模下, 开启多线程并行耗时 <2s, 正确率(Accuracy)：0.975, 参数如下:
+    param= {'eval_metric':'logloss',"eta":0.5,}  num_round = 30
+
+    test3: 二分类任务
+    数据集：Higgs
+    参数:
+      error_rate_threshold=0.01,
+      objective='binary:logistic',
+      max_iter=20,
+      max_depth=3,
+      gama=0.5,
+      reg_lambda=0.5,
+    训练集数量：8000
+    测试集数量：2000
+    正确率：0.822
+    模型训练时长：251s
+
+    使用 pycharm pro 的 profile 性能分析工具, 发现最耗时的函数为 find_split(), 占用全部时间的 98%
+
+    test4: 多分类任务
+    数据集：Mnist
+    参数:
+      error_rate_threshold=0.01
+      max_iter=20,
+      max_depth=3,
+      gama=0,
+      reg_lambda=0,
+      learning_rate=1.0
+    训练集数量：6000
+    测试集数量：1000
+    正确率：0.837
+    模型训练时长：7035s

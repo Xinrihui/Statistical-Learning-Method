@@ -3,13 +3,9 @@
 
 import numpy as np
 
-from tree_model_xrh import *
-from split_evaluator_xrh import *
-from param_xrh import *
-
-from collections import deque
-
-from deprecated import deprecated
+from lib.tree_model_xrh import *
+from lib.split_evaluator_xrh import *
+from lib.param_xrh import *
 
 
 class Builder:
@@ -256,94 +252,6 @@ class Builder:
             node.entry.left_stats = GradeStats()
             node.entry.right_stats = GradeStats()
 
-    @deprecated()
-    def split_nodes_deprecated(self, p_fmat):
-        """
-        根据最优切分点划分所有待分裂节点
-
-        :param p_fmat: 样本特征, 使用 DMatrix 包装
-
-        :return:
-        """
-        l = len(self.qexpand)
-
-        for _ in range(l):  # 宽度受限的BFS
-
-            nid = self.qexpand.pop()  # nid-父节点标号
-            node = self.tree[nid]
-
-            best_split = node.entry.best  # 最佳切分方案
-
-            if best_split.max_gain <= self.params['gama']:  # 划分子节点 所需的最小 增益(Gain); 若小于此阈值, 不往下分裂
-
-                continue
-
-            # 生成左右子节点
-            # left_child_id = next(self.incre_object.id)  # 1
-            self.start_node_id += 1
-            left_child_id = self.start_node_id
-            left_child_node = Node(id=left_child_id)
-
-            # right_child_id = next(self.incre_object.id)  # 2
-            self.start_node_id += 1
-            right_child_id = self.start_node_id
-            right_child_node = Node(id=right_child_id)
-
-            left_child_node.entry.stats = best_split.split_left_stats  # 左子节点的 G,H
-            right_child_node.entry.stats = best_split.split_right_stats  # 右子节点的 G,H
-
-            if self.params['print_log']:  # 打印当前子树
-
-                print('sub_tree:')
-                print('root:{}, root_loss:{}, root_weight:{}'.format(nid, node.entry.root_loss, node.entry.weight))
-                print('best_feature:{}, split_value:{}, default_direction:{}'.format(best_split.feature,
-                                                                                     best_split.split_value,
-                                                                                     best_split.split_default))
-
-            # 左右子节点挂在 node 下
-            node.left = left_child_node
-            node.right = right_child_node
-
-            block_f = p_fmat.sorted_pages[best_split.feature]  # 切分特征对应的块
-
-            block_f_missing = p_fmat.missing_value_pages[best_split.feature]
-
-            offset = best_split.split_offset
-            if best_split.split_default == direction_left:  # 逆序导致需要修正偏移量
-                offset -= 1
-
-            # 更新属于左子节点的样本的归属(position)
-            for _, rid in block_f[:offset + 1]:
-
-                if self.position[rid] == nid:  # 样本原来的归属是父节点
-                    self.position[rid] = left_child_node.id
-
-            # 更新属于右子节点的样本的归属(position)
-            for _, rid in block_f[offset + 1:]:
-
-                if self.position[rid] == nid:  # 样本原来的归属是父节点
-                    self.position[rid] = right_child_node.id
-
-            # 更新存在缺失值的样本 的归属 # TODO: 此步时间复杂度过高, 是否可以不管 存在缺失值的样本
-            if best_split.split_default == direction_right:
-
-                for rid in block_f_missing:
-
-                    if self.position[rid] == nid:  # 样本原来的归属是父节点
-                        self.position[rid] = right_child_node.id
-            else:
-                for rid in block_f_missing:
-
-                    if self.position[rid] == nid:  # 样本原来的归属是父节点
-                        self.position[rid] = left_child_node.id
-
-            # 左右子节点入 待分裂队列 qexpand
-            self.qexpand.appendleft(left_child_node.id)
-            self.qexpand.appendleft(right_child_node.id)
-
-            # 左右子节点加入 tree
-            self.tree.append(left_child_node)
-            self.tree.append(right_child_node)
 
     def split_nodes(self, p_fmat):
         """

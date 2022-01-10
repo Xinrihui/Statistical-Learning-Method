@@ -1,0 +1,65 @@
+### 2.1 xgboost v2
+
+    test1: 回归任务
+    数据集：boston房价数据集
+    参数:
+        error_rate_threshold=0.01,
+        max_iter=100,
+        max_depth=3,
+        learning_rate=0.1,
+        gama=1.0,
+        reg_lambda=1.0
+    训练集数量：455
+    测试集数量：51
+    测试集的 MSE： 9.51
+    模型训练时长：3.2s
+
+
+    test2: 二分类任务
+    数据集：Mnist
+    参数:
+      error_rate_threshold=0.01
+      max_iter=40,
+      max_depth=3,
+      gama=1.0,
+      reg_lambda=1.0,
+      tree_method = 'approx',(近似算法)
+      sketch_eps = 0.3
+    训练集数量：6000
+    测试集数量：1000
+    正确率：0.981
+    模型训练时长： 589s
+
+    test3: 二分类任务
+    数据集：Higgs
+    参数:
+      error_rate_threshold=0.01,
+      objective='binary:logistic',
+      max_iter=30,
+      max_depth=3,
+      gama=1.0,
+      reg_lambda=1.0,
+      tree_method='approx',(近似算法)
+      sketch_eps=0.3,
+    训练集数量：8000
+    测试集数量：2000
+    正确率：0.828
+    模型训练时长： 101s
+
+    test3: 二分类任务
+    数据集：Higgs
+    参数:
+      error_rate_threshold=0.01,
+      objective='binary:logistic',
+      max_iter=30,
+      max_depth=3,
+      gama=1.0,
+      reg_lambda=1.0,
+    训练集数量：8000
+    测试集数量：2000
+    正确率：0.829
+    模型训练时长： 124s
+
+    对比陈天奇的 xgboost, 在同样的数据规模下, 开启多线程并行, 耗时 <5s, 正确率 Accuracy：0.833, 参数如下:
+    param1 = {'objective': 'binary:logistic', "eta": 0.1, "max_depth": 3, "nthread": 16}
+    num_round = 120
