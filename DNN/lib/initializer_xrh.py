@@ -18,7 +18,7 @@ class Initializer:
 
     """
 
-    def init_W(self, layer_dim,prev_layer_dim):
+    def init_W(self, layer_dim, prev_layer_dim):
         """
         初始化 W
 
@@ -28,7 +28,7 @@ class Initializer:
         """
         pass
 
-    def initialize_parameters(self, W_dims_list,*args):
+    def initialize_parameters(self, W_dims_list, *args):
         """
         初始化神经网络的参数
 
@@ -47,19 +47,17 @@ class Initializer:
 
         W_list = []
 
-        for layer_dim,prev_layer_dim in W_dims_list:
-
+        for layer_dim, prev_layer_dim in W_dims_list:
             W = self.init_W(layer_dim, prev_layer_dim)
 
             W_list.append(W)
-
 
         return W_list
 
 
 class ZeroInitializer(Initializer):
 
-    def init_W(self, layer_dim,prev_layer_dim):
+    def init_W(self, layer_dim, prev_layer_dim):
         """
         初始化 W
 
@@ -71,9 +69,10 @@ class ZeroInitializer(Initializer):
 
         return W
 
+
 class OneInitializer(Initializer):
 
-    def init_W(self, layer_dim,prev_layer_dim):
+    def init_W(self, layer_dim, prev_layer_dim):
         """
         初始化 W
 
@@ -86,10 +85,9 @@ class OneInitializer(Initializer):
         return W
 
 
-
 class RandomInitializer(Initializer):
 
-    def init_W(self, layer_dim,prev_layer_dim,scope=0.01):
+    def init_W(self, layer_dim, prev_layer_dim, scope=0.01):
         """
         初始化 W
 
@@ -107,7 +105,7 @@ class RandomInitializer(Initializer):
 
         return W
 
-    def initialize_parameters(self, W_dims_list,scope=0.01):
+    def initialize_parameters(self, W_dims_list, scope=0.01):
         """
         初始化神经网络的参数
 
@@ -127,17 +125,17 @@ class RandomInitializer(Initializer):
 
         W_list = []
 
-        for layer_dim,prev_layer_dim in W_dims_list:
-
-            W = self.init_W(layer_dim, prev_layer_dim,scope)
+        for layer_dim, prev_layer_dim in W_dims_list:
+            W = self.init_W(layer_dim, prev_layer_dim, scope)
 
             W_list.append(W)
 
         return W_list
 
+
 class XavierInitializer(Initializer):
 
-    def init_W(self, layer_dim,prev_layer_dim):
+    def init_W(self, layer_dim, prev_layer_dim):
         """
         初始化 W
 
@@ -148,8 +146,3 @@ class XavierInitializer(Initializer):
         W = np.random.randn(layer_dim, prev_layer_dim) * np.sqrt(2. / prev_layer_dim)
 
         return W
-
-
-
-
-

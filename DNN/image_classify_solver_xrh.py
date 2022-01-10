@@ -8,7 +8,7 @@ from lib import optimizer_xrh as optim
 
 from lib.cnn_multi_classify_xrh import *
 
-from lib.dataset_utils_xrh import *
+from lib.classify_dataset_xrh import *
 
 import time
 
@@ -259,20 +259,20 @@ class Test:
         )
 
         solver = ImageClassifySolver(cnn_model, dataset_train,
-                                     model_path='model/cnn_multi_classify.model',
+                                     model_path='models/cnn_multi_classify.model',
                                      optimize_mode='Adam',
                                      num_epochs=5,
                                      batch_size=512,
                                      optim_config={
                                          'learning_rate': 5e-3,
-                                         'bias_correct': False
+                                         'bias_correct': True
                                      },
                                      print_log=True,
                                      print_every=10,
                                      )
 
 
-        # solver.fit()
+        solver.fit()
 
         # 结束时间
         end = time.time()
@@ -289,7 +289,7 @@ class Test:
 
         cnn_model_pre_train = MultiClassifyCNN(
             use_pre_train=True,
-            model_path='model/cnn_multi_classify.model'
+            model_path='models/cnn_multi_classify.model'
         )
 
         # 1.获取测试集

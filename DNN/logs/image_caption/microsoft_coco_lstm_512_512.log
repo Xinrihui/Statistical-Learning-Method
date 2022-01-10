@@ -1,0 +1,212 @@
+模型超参数
+hidden_dim=512,
+wordvec_dim=512,
+
+
+--------------------------
+实验1
+
+数据集大小: 500
+
+使用 PCA 对图像向量进行降维:
+feature_dim = 512
+
+图片嵌入层使用 relu 激活函数
+
+图片描述序列长度: 17
+
+训练参数:
+num_epochs=50,
+batch_size=64,
+'learning_rate': 5e-3
+'bias_correct': True
+
+
+Epoch: 1/50
+100%|██████████| 7/7 [00:12<00:00,  1.75s/it]
+loss:54.27070843744652
+Epoch: 2/50
+100%|██████████| 7/7 [00:12<00:00,  1.80s/it]
+loss:49.159955335031796
+...
+Epoch: 49/50
+100%|██████████| 7/7 [00:13<00:00,  1.87s/it]
+loss:0.08657391517846912
+Epoch: 50/50
+100%|██████████| 7/7 [00:13<00:00,  1.88s/it]
+loss:0.046883383536682026
+
+
+推理序列长度:
+max_length = 20
+
+推理结果
+candidates:  [
+'an old man with a <UNK> looking face <END> <END> <END> <END> <END> <END> <END> <END> <END> <END> <END> <END>',
+'a young man holding a <UNK> on top of a court <END> <END> <END> <END> <END> <END> <END> <END> <END>',
+'this is a picture of a very large old clock tower <END> <END> <END> <END> <END> <END> <END> <END> <END>',
+'a decorative vase with <UNK> with a flower <UNK> in back <END> <END> <END> <END> <END> <END> <END> <END> <END>']
+
+对照文本
+references:  [
+'<START> an old man with a <UNK> looking face <END>',
+'<START> a young man holding a <UNK> on top of a court <END>',
+'<START> this is a picture of a very large old clock tower <END>',
+'<START> a decorative vase with <UNK> with a flower <UNK> in back <END>']
+
+
+--------------------------
+实验2
+
+数据集大小: 500
+
+未使用PCA 对图像向量进行降维:
+feature_dim = 4096
+
+图片嵌入层使用 relu 激活函数
+
+图片描述序列长度: 17
+
+训练参数:
+num_epochs=50,
+batch_size=64,
+'learning_rate': 5e-3
+'bias_correct': True
+
+Epoch: 1/50
+100%|██████████| 7/7 [00:14<00:00,  2.10s/it]
+loss:54.02079096292437
+Epoch: 2/50
+100%|██████████| 7/7 [00:14<00:00,  2.09s/it]
+loss:48.84728217950863
+...
+Epoch: 49/50
+100%|██████████| 7/7 [00:13<00:00,  1.92s/it]
+loss:7.00907818601508
+Epoch: 50/50
+100%|██████████| 7/7 [00:13<00:00,  1.93s/it]
+loss:6.58803353380722
+
+推理序列长度:
+max_length = 20
+
+推理结果
+candidates:  [
+'a group of people play tennis on a tennis court <END> <END> <END> <END> <END> <END> <END> <END> <END> <END>',
+'a group of people play tennis on a tennis court <END> <END> <END> <END> <END> <END> <END> <END> <END> <END>',
+'a group of people play tennis on a tennis court <END> <END> <END> <END> <END> <END> <END> <END> <END> <END>',
+'a group of people play tennis on a tennis court <END> <END> <END> <END> <END> <END> <END> <END> <END> <END>']
+
+对照文本
+references:  [
+'<START> a laptop and some books on a wooden table <END>',
+'<START> a small empty bathroom with the door open <END>',
+'<START> an black and <UNK> <UNK> image of the beach <END>',
+'<START> an open bathroom door with a mirror sink toilet and a tub <END>']
+
+
+--------------------------
+实验3
+
+数据集大小: 500
+
+未使用PCA 对图像向量进行降维:
+feature_dim = 4096
+
+图片嵌入层使用 sigmoid 激活函数
+
+图片描述序列长度: 17
+
+训练参数:
+num_epochs=10,
+batch_size=64,
+'learning_rate': 5e-3
+'bias_correct': True
+
+Epoch: 1/10
+100%|██████████| 7/7 [00:12<00:00,  1.85s/it]
+loss:54.99368726981905
+Epoch: 2/10
+100%|██████████| 7/7 [00:13<00:00,  1.87s/it]
+loss:49.011822628035496
+...
+
+Epoch: 9/10
+100%|██████████| 7/7 [00:13<00:00,  1.99s/it]
+loss:37.11635546129562
+Epoch: 10/10
+100%|██████████| 7/7 [00:13<00:00,  1.91s/it]
+loss:36.52181827564664
+
+candidates:  [
+'a man with a <UNK> <UNK> <UNK> <UNK> <UNK> <END> <END> <END> <END> <END> <END> <END> <END> <END> <END> <END>',
+'a man is <UNK> <UNK> <UNK> and <UNK> <UNK> <END> <END> <END> <END> <END> <END> <END> <END> <END> <END> <END>',
+'a man is <UNK> <UNK> <UNK> and <UNK> <UNK> <END> <END> <END> <END> <END> <END> <END> <END> <END> <END> <END>',
+'a man with a <UNK> <UNK> <UNK> <UNK> <UNK> <END> <END> <END> <END> <END> <END> <END> <END> <END> <END> <END>']
+
+references:  [
+'<START> street sign with graffiti on post in urban setting <END>',
+'<START> man sleeping in a bed with an orange <UNK> cat laying down on him <END>',
+'<START> a boy staring at the camera and holding a <UNK> baseball bat <END>',
+ '<START> a large tower in the background of some people <END>']
+
+显然此时模型欠拟合
+
+--------------------------
+实验4
+
+数据集大小: 500
+
+未使用PCA 对图像向量进行降维:
+feature_dim = 4096
+
+图片嵌入层使用 sigmoid 激活函数
+
+图片描述序列长度: 17
+
+训练参数:
+num_epochs=50,
+batch_size=64,
+'learning_rate': 5e-3
+'bias_correct': True
+
+Epoch: 1/50
+100%|██████████| 7/7 [00:13<00:00,  1.98s/it]
+loss:54.99368726981905
+Epoch: 2/50
+100%|██████████| 7/7 [00:12<00:00,  1.84s/it]
+loss:49.011822628035496
+Epoch: 3/50
+100%|██████████| 7/7 [00:12<00:00,  1.82s/it]
+loss:49.19609678737427
+...
+Epoch: 49/50
+100%|██████████| 7/7 [00:14<00:00,  2.03s/it]
+loss:1.5924431938501047
+Epoch: 50/50
+100%|██████████| 7/7 [00:15<00:00,  2.25s/it]
+loss:1.1876300883650224
+
+推理序列长度:
+max_length = 20
+
+推理结果
+candidates:  [
+'a dog has the <UNK> seat in this car <END> <END> <END> <END> <END> <END> <END> <END> <END> <END> <END>',
+'a small empty bathroom with the door open <END> <END> <END> <END> <END> <END> <END> <END> <END> <END> <END> <END>',
+'an black and <UNK> <UNK> image of the beach <END> <END> <END> <END> <END> <END> <END> <END> <END> <END> <END>',
+'an open bathroom door with a mirror sink toilet and a tub <END> <END> <END> <END> <END> <END> <END> <END>']
+
+对照文本
+references:  [
+'<START> a laptop and some books on a wooden table <END>',
+'<START> a small empty bathroom with the door open <END>',
+'<START> an black and <UNK> <UNK> image of the beach <END>',
+'<START> an open bathroom door with a mirror sink toilet and a tub <END>']
+
+对比 实验1 实验2 和 实验3 的结果我们发现, 在图片向量很大的情况下(未使用PCA降维), 对于图片嵌入层, 使用 relu 激活函数会导致该层训练程度不够,
+换成sigmoid 激活函数则会缓解此问题
+
+
+
+

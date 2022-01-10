@@ -7,6 +7,7 @@ import math
 
 import time
 
+
 class Optimizer:
     """
     优化算法
@@ -21,7 +22,6 @@ class Optimizer:
 
     """
 
-
     def __init__(self, optim_config):
         """
 
@@ -34,9 +34,7 @@ class Optimizer:
         """
         self.learning_rate = optim_config.setdefault('learning_rate', 0.01)
 
-
-
-    def update_parameter(self, param , grad_param,optim_config):
+    def update_parameter(self, param, grad_param, optim_config):
         """
         根据反向传播计算得到梯度信息 更新 模型参数
 
@@ -47,10 +45,10 @@ class Optimizer:
         """
         pass
 
+
 class BGDOptimizer(Optimizer):
 
-
-    def update_parameter(self, param , grad_param,optim_param):
+    def update_parameter(self, param, grad_param, optim_param):
         """
         根据反向传播计算得到梯度信息 更新 模型参数
 
@@ -66,12 +64,11 @@ class BGDOptimizer(Optimizer):
         param_value -= self.learning_rate * grad_param
 
         return param_value
-
 
 
 class MinBatchOptimizer(Optimizer):
 
-    def update_parameter(self, param , grad_param,optim_param):
+    def update_parameter(self, param, grad_param, optim_param):
         """
         根据反向传播计算得到梯度信息 更新 模型参数
 
@@ -87,6 +84,7 @@ class MinBatchOptimizer(Optimizer):
         param_value -= self.learning_rate * grad_param
 
         return param_value
+
 
 class MomentumOptimizer(MinBatchOptimizer):
 
@@ -111,8 +109,7 @@ class MomentumOptimizer(MinBatchOptimizer):
         self.learning_rate = optim_config.setdefault('learning_rate', 0.01)
         self.beta1 = optim_config.setdefault('beta1', 0.9)
 
-
-    def update_parameter(self, param ,grad_param,optim_param):
+    def update_parameter(self, param, grad_param, optim_param):
         """
         根据反向传播计算得到梯度信息 更新 模型参数
 
@@ -126,11 +123,11 @@ class MomentumOptimizer(MinBatchOptimizer):
         param_name = param[0]
         param_value = param[1]
 
-        v_param = optim_param.setdefault("v_"+str(param_name), np.zeros(np.shape(param_value))) # v_param 初始化为 0
+        v_param = optim_param.setdefault("v_" + str(param_name), np.zeros(np.shape(param_value)))  # v_param 初始化为 0
 
         v_param = self.beta1 * v_param + (1 - self.beta1) * grad_param
 
-        optim_param["v_"+str(param_name)] = v_param # 更新优化器的参数
+        optim_param["v_" + str(param_name)] = v_param  # 更新优化器的参数
 
         param_value -= self.learning_rate * v_param
 
@@ -164,13 +161,11 @@ class AdamOptimizer(MinBatchOptimizer):
         self.learning_rate = optim_config.setdefault('learning_rate', 1e-3)
         self.beta1 = optim_config.setdefault('beta1', 0.9)
         self.beta2 = optim_config.setdefault('beta2', 0.999)
-        self.epsilon = optim_config.setdefault('epsilon',1e-8)
+        self.epsilon = optim_config.setdefault('epsilon', 1e-8)
 
-        self.bias_correct = optim_config.setdefault('bias_correct',False)
+        self.bias_correct = optim_config.setdefault('bias_correct', True)
 
-
-
-    def update_parameter(self,param, grad_param, optim_param):
+    def update_parameter(self, param, grad_param, optim_param):
         """
         根据反向传播计算得到梯度信息 更新 模型参数
 
@@ -183,9 +178,9 @@ class AdamOptimizer(MinBatchOptimizer):
         param_name = param[0]
         param_value = param[1]
 
-        m_param = optim_param.setdefault("m_" + str(param_name),  np.zeros(np.shape(param_value))) # m_param 初始化为 0
-        v_param = optim_param.setdefault("v_"+str(param_name), np.zeros(np.shape(param_value))) # v_param 初始化为 0
-        t_param = optim_param.setdefault("t_" + str(param_name), 0)
+        m_param = optim_param.setdefault("m_" + str(param_name), np.zeros(np.shape(param_value)))  # m_param 初始化为 0
+        v_param = optim_param.setdefault("v_" + str(param_name), np.zeros(np.shape(param_value)))  # v_param 初始化为 0
+        t_param = optim_param.setdefault("t_" + str(param_name), 1)  # 必须从1开始, 若为0 会造成后面的除0错误
 
         # 一阶矩
         m_param = self.beta1 * m_param + (1 - self.beta1) * grad_param
@@ -194,7 +189,7 @@ class AdamOptimizer(MinBatchOptimizer):
 
         # 更新优化器的参数
         optim_param["m_" + str(param_name)] = m_param
-        optim_param["v_"+str(param_name)] = v_param
+        optim_param["v_" + str(param_name)] = v_param
 
         # 使用偏差修正
         if self.bias_correct:
@@ -207,12 +202,6 @@ class AdamOptimizer(MinBatchOptimizer):
         # 更新优化器的参数
         optim_param["t_" + str(param_name)] = (t_param + 1)
 
-        param_value -= ((alpha * m_param) / np.sqrt(v_param+self.epsilon))
-
+        param_value -= alpha*(m_param / np.sqrt(v_param + self.epsilon))
 
         return param_value
-
-
-
-
-

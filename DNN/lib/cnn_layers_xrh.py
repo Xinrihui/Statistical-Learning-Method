@@ -607,7 +607,7 @@ class UnitTest:
         cnn_layer = CNNLayer()
         out, cache = cnn_layer.convolution_forward(parameters=params, layer_name='conv1', config_conv=conv_param,
                                                    a_prev=x)
-
+        # 反向传播计算的梯度
         grad_a_prev, grad_dic = cnn_layer.convolution_bakward(grad_out=grad_out, cache=cache)
         dx = grad_a_prev
 
@@ -630,6 +630,7 @@ class UnitTest:
             params['b_conv1'] = tmp
             return res
 
+        # 数值方法计算的梯度
         dx_num = eval_numerical_gradient_array(fx, x, grad_out)
 
         dW_num = eval_numerical_gradient_array(fW, W_conv1, grad_out)
@@ -782,4 +783,4 @@ if __name__ == '__main__':
 
     # test.test_average_pool_bakward()
 
-    test.test_affine_backward()
+    # test.test_affine_backward()

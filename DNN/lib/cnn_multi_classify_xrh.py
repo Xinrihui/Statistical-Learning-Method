@@ -250,7 +250,7 @@ class MultiClassifyCNN:
         # y_ba  shape (class_num,N)
 
         # 样本标签的 one-hot 化 shape (N,) -> (N,class_num)
-        y_onehot = Utils.convert_to_one_hot(x=batch_label, class_num=self.class_num)  # shape (N,T-1,class_num)
+        y_onehot = ArrayUtils.one_hot_array(x=batch_label, class_num=self.class_num)  # shape (N,T-1,class_num)
 
         # 计算损失函数
         loss, grad_z_y = self.cnn_layer.multi_classify_loss_func(z_y=z_y, y_ba=y_ba, y_onehot=y_onehot.T)

@@ -385,7 +385,7 @@ class AdamOptimizer(MinBatchOptimizer):
             self.v_gama_list[l] = self.beta2 * self.v_gama_list[l] + (1-self.beta2)* np.square(grad_gama_list[l])
             self.v_beta_list[l] = self.beta2 * self.v_beta_list[l] + (1 -self.beta2) * np.square(grad_beta_list[l])
 
-            # 偏差修正 TODO: 会造成计算溢出,模型不收敛,原因未知
+            # 偏差修正 TODO: 使用偏差修正会造成计算溢出, 模型不收敛; 原因: t 的初始值为 0, 导致后面发生 除 0 错误
             if use_bias_correct:
                 z1 = 1-(self.beta1**t)
                 z2 = 1 - (self.beta2**t)

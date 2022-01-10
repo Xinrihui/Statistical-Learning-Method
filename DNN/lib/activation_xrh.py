@@ -12,6 +12,30 @@ class Activation:
     """
 
     @staticmethod
+    def none(x):
+        """
+        不使用激活函数, 等价于  f(x) = x
+
+        :param x:
+        :return:
+        """
+
+        return x
+
+    @staticmethod
+    def grad_none(x):
+        """
+        不使用激活函数 的一阶导数
+
+        :param x:
+        :return:
+        """
+
+        a = np.ones(np.shape(x))
+
+        return a
+
+    @staticmethod
     def tanh(X):
         """
         tanh 激活函数
@@ -23,7 +47,7 @@ class Activation:
         return np.tanh(X)
 
     @staticmethod
-    def grad_tanh( z):
+    def grad_tanh(z):
         """
         tanh 函数的一阶导数
 
@@ -33,7 +57,7 @@ class Activation:
         return 1-(np.tanh(z))**2
 
     @staticmethod
-    def sigmoid( X):
+    def sigmoid_deprecated(X):
         """
         sigmoid 激活函数
 
@@ -49,6 +73,23 @@ class Activation:
             print(e)  # debug 时 , 在此处打断点
 
         return a
+
+    @staticmethod
+    def sigmoid(x):
+        """
+        sigmoid 函数的 数值稳定版本
+        :param x:
+        :return:
+        """
+        pos_mask = (x >= 0)
+        neg_mask = (x < 0)
+        z = np.zeros_like(x)
+        z[pos_mask] = np.exp(-x[pos_mask])
+        z[neg_mask] = np.exp(x[neg_mask])
+        top = np.ones_like(x)
+        top[neg_mask] = z[neg_mask]
+
+        return top / (1 + z)
 
     @staticmethod
     def grad_sigmoid( z):

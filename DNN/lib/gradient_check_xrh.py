@@ -2,18 +2,28 @@
 # -*- coding: UTF-8 -*-
 
 import numpy as np
-from random import randrange
 
 
-def rel_error( x, y):
-    """ returns relative error """
-    return np.max(np.abs(x - y) / (np.maximum(1e-8, np.abs(x) + np.abs(y))))
+def rel_error(grad_num, grad):
+    """
+    计算 通过数值方法得到的梯度 和 通过反向传播得到的梯度的距离
+
+    :param x: 通过数值方法得到的梯度
+    :param y: 通过反向传播得到的梯度
+    :return:
+    """
+    return np.max(np.abs(grad_num - grad) / (np.maximum(1e-8, np.abs(grad_num) + np.abs(grad))))
 
 def eval_numerical_gradient(f, x, verbose=True, h=0.00001):
     """
-    a naive implementation of numerical gradient of f at x
-    - f should be a function that takes a single argument
-    - x is the point (numpy array) to evaluate the gradient at
+    返回 数值梯度
+
+
+    :param f: f should be a function that takes a single argument
+    :param x: x is the point (numpy array) to evaluate the gradient at
+    :param verbose:
+    :param h:
+    :return:
     """
 
     fx = f(x) # evaluate function value at original point
@@ -41,12 +51,18 @@ def eval_numerical_gradient(f, x, verbose=True, h=0.00001):
 
 def eval_numerical_gradient_array(f, x, df, h=1e-5):
     """
-    Evaluate a numeric gradient for a function that accepts a numpy
-    array and returns a numpy array.
+    返回 数值梯度, 要考虑下一层传递给当前层的梯度
+
+    :param f: 当前层的前向传播算法
+    :param x: 目标数组
+    :param df: 下一层传给当前层的梯度
+    :param h: 一个很小的数
+    :return:
     """
+
     grad = np.zeros_like(x)
     it = np.nditer(x, flags=['multi_index'], op_flags=['readwrite'])
-    while not it.finished:
+    while not it.finished:  # 遍历数组中的每一个元素(每一个位)
         ix = it.multi_index
 
         oldval = x[ix]
@@ -56,7 +72,8 @@ def eval_numerical_gradient_array(f, x, df, h=1e-5):
         neg = f(x).copy()
         x[ix] = oldval
 
-        grad[ix] = np.sum((pos - neg) * df) / (2 * h)
+        grad[ix] = np.sum((pos - neg) * df) / (2 * h)  # 梯度检验的公式为 用数值方法估计损失函数对参数的某一位的偏导数
+        # 这里转换为： 下一层的梯度(损失函数对当前层输出的偏导数)传给当前层
         it.iternext()
     return grad
 

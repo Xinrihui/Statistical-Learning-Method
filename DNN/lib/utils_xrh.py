@@ -3,10 +3,11 @@
 
 import numpy as np
 
-class Utils:
+
+class ArrayUtils:
 
     @staticmethod
-    def convert_to_one_hot(x, class_num, dtype=np.int32):
+    def one_hot_array(x, class_num, dtype=np.int32):
         """
         将标签值转为 one-hot 向量
 
@@ -22,7 +23,7 @@ class Utils:
 
         one_hot_flat = np.eye(class_num)[idx]  # shape (N,class_num) , class_num - 类别个数  N - 样本个数
 
-        one_hot_vec = one_hot_flat.reshape(x_shape+(-1,))
+        one_hot_vec = one_hot_flat.reshape(x_shape + (-1,))
 
         return one_hot_vec
 
@@ -30,12 +31,11 @@ class Utils:
 class Test:
 
     def test_convert_to_one_hot(self):
-
         x1 = np.array([1, 2, 3, 4])
         class_num = 5
-        print('x1 one-hot :',Utils.convert_to_one_hot(x1, class_num))  # shape: (N,class_num)
+        print('x1 one-hot :', ArrayUtils.one_hot_array(x1, class_num))  # shape: (N,class_num)
 
-        N,T,class_num = 5,3,4
+        N, T, class_num = 5, 3, 4
         x2 = np.zeros((N, T)).astype(np.int8)
         x2[0][1] = 1
         x2[1][0] = 2
@@ -44,16 +44,16 @@ class Test:
         x2[3][1] = 2
         x2[4][2] = 3
 
-        print('x2:',x2)
+        print('x2:', x2)
 
-        x2_one_hot = Utils.convert_to_one_hot(x2, class_num)
+        x2_one_hot = ArrayUtils.one_hot_array(x2, class_num)
 
-        print('x2 one-hot :',x2_one_hot)
+        print('x2 one-hot :', x2_one_hot)
 
-        print('x2 shape:',np.shape(x2_one_hot))
+        print('x2 shape:', np.shape(x2_one_hot))
+
 
 if __name__ == '__main__':
-
     test = Test()
 
     test.test_convert_to_one_hot()

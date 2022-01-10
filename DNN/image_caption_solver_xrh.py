@@ -3,14 +3,19 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from lib import optimizer_xrh as optim
 
 from lib.lstm_caption_xrh import *
 from lib.rnn_caption_xrh import *
+from lib.bleu_xrh import *
 
-from lib.coco_utils import *
+from lib.microsoft_coco_dataset_xrh import *
+from flicker_dataset_xrh import *
 from lib.image_utils import *
+from lib.evaluate_xrh import *
+
 
 class ImageCaptionSolver:
     """
@@ -19,9 +24,9 @@ class ImageCaptionSolver:
 
     示例代码:
 
-    data = load_coco_data()
+    dataset = DataSet()
     model = RNNModel(hidden_dim=100)
-    solver = CaptioningSolver(model, data,
+    solver = CaptioningSolver(model, dataset,
                     update_rule='BGD',
                     optim_config={
                       'learning_rate': 1e-3,
@@ -46,7 +51,7 @@ class ImageCaptionSolver:
       - loss: 损失函数的值
       - grads: 是一个字典, 包含了模型所有需要更新的参数的梯度, 它里面的元素和 model.params 中的一一对应
 
-    - model.inference_sample(images_feature, caption_length) 利用训练好的模型进行推理
+    - model.inference_batch(images_feature, caption_length) 利用训练好的模型进行推理
 
     Author: xrh
     Date: 2021-08-01
@@ -54,13 +59,13 @@ class ImageCaptionSolver:
     """
 
     def __init__(self, model, dataset,
-                 model_path='model/lstm_caption.model',
+                 model_path='models/lstm_caption.model',
                  **kwargs):
         """
 
         必要参数:
         - model: RNN 模型对象
-        - dataset: 从 load_coco_data 中获得的训练集和验证集数据
+        - dataset: 数据集对象, 通过它可以获得的训练集和验证集数据
         - model_path: 预训练模型的路径
 
         可选参数:
@@ -87,9 +92,9 @@ class ImageCaptionSolver:
 
         # 解析可选参数列表
         # kwargs = dict()
-        self.optimize_mode = kwargs.pop('optimize_mode', 'MinBatch') # 将元素从字典中弹出, 若字典中没有此 key, 则赋值为默认值
+        self.optimize_mode = kwargs.pop('optimize_mode', 'MinBatch')  # 将元素从字典中弹出, 若字典中没有此 key, 则赋值为默认值
         self.optim_config = kwargs.pop('optim_config', {})
-        self.batch_size = kwargs.pop('batch_size', 100)
+        self.batch_size = kwargs.pop('batch_size', 128)
         self.num_epochs = kwargs.pop('num_epochs', 10)
 
         self.print_log = kwargs.pop('print_log', True)
@@ -102,7 +107,7 @@ class ImageCaptionSolver:
 
         # 配置优化算法
         class_name = self.optimize_mode + 'Optimizer'  # 'BGD' + 'Optimizer' = 'BGDOptimizer'
-        if not hasattr( optim , class_name):
+        if not hasattr(optim, class_name):
             raise ValueError('Invalid optimize_mode "%s"' % self.optimize_mode)
 
         Optimizer = getattr(optim, class_name)
@@ -113,7 +118,6 @@ class ImageCaptionSolver:
         # 记录每一次迭代(iteration)的损失函数的值
         self.loss_history = []
 
-
     def fit_one_iteration(self):
         """
         模型训练的一次迭代 (iteration) , 多次迭代组成一个 epcho
@@ -121,24 +125,24 @@ class ImageCaptionSolver:
         :return:
         """
 
-        captions, images_feature, urls = sample_coco_minibatch(self.dataset, batch_size=self.batch_size, split='train')# 从 dataset 随机采样 batch_size 个样本
+        captions, images_feature = self.dataset.sample_minibatch(
+            batch_size=self.batch_size)  # 从 dataset 随机采样 batch_size 个样本
 
         # images_feature = images_feature.T
 
-        loss, grads = self.model.fit_batch( batch_sentence=captions, images_feature=images_feature)
+        loss, grads = self.model.fit_batch(batch_sentence=captions, images_feature=images_feature)
 
-        self.loss_history.append(loss) # 记录这次迭代的损失
+        self.loss_history.append(loss)  # 记录这次迭代的损失
 
         # 更新模型的参数
         for param_name, param_value in self.model.params.items():
             # self.params = {"U":U,"W":W,"V":V,"b_z":b_z,"b_o":b_o,"W_embed":W_embed,"W_pict":W_pict,"b_pict":b_pict}
 
-            grad_param = grads['grad_'+param_name]
+            grad_param = grads['grad_' + param_name]
 
-            next_param_value = self.optimizer.update_parameter((param_name,param_value), grad_param, self.optim_param)
+            next_param_value = self.optimizer.update_parameter((param_name, param_value), grad_param, self.optim_param)
 
             self.model.params[param_name] = next_param_value
-
 
     def fit(self):
         """
@@ -147,93 +151,107 @@ class ImageCaptionSolver:
         :return:
         """
 
-        num_train = self.dataset['train_captions'].shape[0] # 训练数据集中含有的样本个数 50
+        print('train dataset num:{}, picture_feature_dim:{}, caption_length:{}'.format(self.dataset.N, self.dataset.feature_dim, self.dataset.caption_length))  # 训练数据集中含有的样本个数
 
-        iterations_per_epoch = max(num_train // self.batch_size, 1) # 每一个 epoch 要迭代的次数 50/25=2
+        iterations_per_epoch = max(self.dataset.N // self.batch_size, 1)  # 每一个 epoch 要迭代的次数 50/25=2
 
-        num_iterations = self.num_epochs * iterations_per_epoch # 总共迭代的次数
+        # num_iterations = self.num_epochs * iterations_per_epoch  # 总共迭代的次数
 
-        for t in range(num_iterations):
+        for epoch in range(1, self.num_epochs+1):
 
-            self.fit_one_iteration()
+            print('Epoch: {}/{}'.format(epoch, self.num_epochs))
 
-            # Maybe print training loss
-            if self.print_log and t % self.print_every == 0:
-                print('(Iteration %d / %d) loss: %f' % (
-                    t + 1, num_iterations, self.loss_history[-1]))
+            for t in tqdm(range(iterations_per_epoch)):  # 可显示进度条
+                self.fit_one_iteration()
+
+            print('loss:{}'.format(self.loss_history[-1]))  # TODO：tqdm 会在这里多打印一行
 
         # 存储训练好的模型
-        self.model.save(self.model_path)
+        self.model.save()
+
+    def inference(self, features, max_length):
+        """
+        推理, 并对推理结果进行解码
+
+        :param features: 图片特征向量
+        :param max_length: 推理序列的长度
+        :return:
+        """
+
+        decode_result = self.model.inference_batch(features, caption_length=max_length)
+
+        candidates = []
+
+        # print(decode_result)
+
+        for prediction in decode_result:
+            output = ' '.join([self.dataset.vocab_obj.map_id_to_word(i) for i in prediction])
+            candidates.append(output)
+
+        return candidates
+
+
+
 
 class Test:
 
-
-    def test_rnn_image_caption(self):
-
+    def test_rnn_image_caption_microsoft_coco(self):
 
         # 0. 了解数据集
-        # data = load_coco_data(base_dir='../dataset/coco_captioning', pca_features=True)
+
+        # coco_dataset = MicrosoftCocoDataset(base_dir='../dataset/ImageCaption/microsoft_coco')
 
         # Print out all the keys and values from the data dictionary
-        # for k, v in data.items():
+
+        # for k, v in coco_dataset.dataset.items():
         #     if type(v) == np.ndarray:
         #         print(k, type(v), v.shape, v.dtype)
         #     else:
         #         print(k, type(v), len(v))
 
-        # train_captions  (400135, 17) train 为训练集
-        # train_image_idxs  (400135,)  评论到图片的映射, 通过映射找到评论对应的图片向量
-        # val_captions   (195954, 17)  val 为验证集
-        # val_image_idxs  (195954,)
-        # train_features  (82783, 512) 向量化后的图片, 维度为 512
-        # val_features  (40504, 512)
-        # idx_to_word <class 'list'> 1004 词表中单词的个数
-        # word_to_idx <class 'dict'> 1004
-        # train_urls   (82783,)
-        # val_urls     (40504,)
-
         # Sample a minibatch and show the images and captions
 
-        batch_size = 2
-
-        # captions, features, urls = sample_coco_minibatch(data, batch_size=batch_size)
+        # batch_size = 2
+        #
+        # captions, features, urls = coco_dataset.sample_minibatch(batch_size=batch_size, return_url=True)
         # for i, (caption, url) in enumerate(zip(captions, urls)):
         #     plt.imshow(image_from_url(url))
         #     plt.axis('off')
-        #     caption_str = decode_captions(caption, data['idx_to_word'])
+        #     caption_str = coco_dataset.decode_captions(caption)
         #     plt.title(caption_str)
         #     plt.show()
-
 
         # np.random.seed(231)
 
         # 1.读取训练数据
-        small_data = load_coco_data(base_dir='../dataset/coco_captioning',max_train=80000)
+        coco_dataset = MicrosoftCocoDataset(base_dir='../dataset/ImageCaption/microsoft_coco', sample_N=500)
+
+        model_path = 'models/microsoft coco/rnn_caption.model'
 
         # 2. 训练模型
         rnn_model = CaptionRNN(
 
-            feature_dim=small_data['train_features'].shape[1],
-            word_to_idx=small_data['word_to_idx'],
+            feature_dim=coco_dataset.dataset['train_features'].shape[1],
+            word_to_idx=coco_dataset.dataset['word_to_idx'],
             hidden_dim=512,
             wordvec_dim=256,
+            model_path=model_path,
             use_pre_train=False
         )
 
-        solver = ImageCaptionSolver(rnn_model, small_data,
-                                            optimize_mode='Adam',
-                                            num_epochs=20,
-                                            batch_size=512,
-                                            optim_config={
-                                                'learning_rate': 1e-3,
-                                                'bias_correct':False
-                                            },
-                                            print_log=True,
-                                            print_every=10,
-                                            )
+        solver = ImageCaptionSolver(rnn_model, coco_dataset,
+                                    optimize_mode='Adam',
+                                    num_epochs=50,
+                                    batch_size=25,
+                                    optim_config={
+                                        'learning_rate': 5e-3,
+                                        'bias_correct': True
+                                    },
+                                    print_log=True,
+                                    print_every=10
+                                    )
 
-
-        # solver.fit()
+        solver.fit()
 
         # # Plot the training losses
         # plt.plot(solver.loss_history)
@@ -242,133 +260,284 @@ class Test:
         # plt.title('Training loss history')
         # plt.show()
 
-        # 3.测试模型
+        # 3.模型推理
 
-        rnn_model = CaptionRNN(
-            use_pre_train=True
+        rnn_model_infer = CaptionRNN(
+
+            use_pre_train=True,
+            model_path=model_path  # 预训练的模型的路径
         )
 
+        infer = ImageCaptionSolver(rnn_model_infer, coco_dataset)
 
-        split = 'train'
+        Type = 'train'  # 训练数据集
+        # Type = 'val'
 
-        minibatch = sample_coco_minibatch(small_data, split=split, batch_size=10)
+        minibatch = coco_dataset.sample_minibatch(Type=Type, batch_size=4, return_url=True)  # 在 small_data 中随机采样
 
         origin_captions, features, urls = minibatch
-        origin_captions = decode_captions(origin_captions, small_data['idx_to_word'])
+        references = coco_dataset.decode_captions(origin_captions)
 
-        sample_captions = rnn_model.inference_sample(features)
+        candidates = infer.inference(features, max_length=20)
 
-        res_captions = decode_captions(sample_captions, small_data['idx_to_word'])
+        # candidates = coco_dataset.decode_captions(candidates)
 
-        for gt_caption, sample_caption, url in zip(origin_captions, res_captions, urls):
-            plt.imshow(image_from_url(url))
-            plt.title('%s\n %s\n origin:%s' % (split, sample_caption, gt_caption))
-            plt.axis('off')
-            plt.show()
+        print('candidates: ', candidates)
+        print('references: ', references)
 
-
-    def test_lstm_image_caption(self):
-
-
-        # 0. 了解数据集
-        # data = load_coco_data(base_dir='../dataset/coco_captioning', pca_features=True)
-
-        # 训练集(train)
-        # train_captions  (400135, 17)
-        # train_image_idxs  (400135,)  评论到图片的映射, 通过映射找到评论对应的图片向量
-        # train_features  (82783, 512) 向量化后的图片, 维度为 512
-
-        # val_captions   (195954, 17)  val 为验证集
-        # val_image_idxs  (195954,)
-        # train_features  (82783, 512) 向量化后的图片, 维度为 512
-        # val_features  (40504, 512)
-        # idx_to_word <class 'list'> 1004 词表中单词的个数
-        # word_to_idx <class 'dict'> 1004
-        # train_urls   (82783,)
-        # val_urls     (40504,)
-
-        # Sample a minibatch and show the images and captions
-
-        # batch_size = 2
-        # captions, features, urls = sample_coco_minibatch(data, batch_size=batch_size)
-        # for i, (caption, url) in enumerate(zip(captions, urls)):
+        # for gt_caption, sample_caption, url in zip(origin_captions, res_captions, urls):
         #     plt.imshow(image_from_url(url))
+        #     plt.title('%s\n %s\n origin:%s' % (Type, sample_caption, gt_caption))
         #     plt.axis('off')
-        #     caption_str = decode_captions(caption, data['idx_to_word'])
-        #     plt.title(caption_str)
         #     plt.show()
 
+    def test_lstm_image_caption_microsoft_coco(self):
 
-        np.random.seed(231)
 
         # 1.读取训练数据
-        # small_data = load_coco_data(base_dir='../dataset/coco_captioning', max_train=50000)
 
-        small_data = load_coco_data(base_dir='../dataset/coco_captioning', max_train=50)
+        # coco_dataset = MicrosoftCocoDataset(sample_N=50000)
+
+        coco_dataset = MicrosoftCocoDataset(base_dir='../dataset/ImageCaption/microsoft_coco', sample_N=500, use_pca_features=False)
+
+        print('train dataset num:{}, picture_feature_dim:{}, caption_length:{}'.format(coco_dataset.N, coco_dataset.feature_dim, coco_dataset.caption_length))  # 训练数据集中含有的样本个数
+
 
         # 2. 训练模型
+
+        model_path = 'models/microsoft coco/lstm_caption.model'
+
         lstm_model = CaptionLSTM(
 
-            feature_dim=small_data['train_features'].shape[1],
-            word_to_idx=small_data['word_to_idx'],
+            feature_dim=coco_dataset.dataset['train_features'].shape[1],
+            word_to_idx=coco_dataset.dataset['word_to_idx'],
             hidden_dim=512,
-            wordvec_dim=256,
+            wordvec_dim=512,
             use_pre_train=False,
-            model_path='model/lstm_caption.model' # 预训练的模型的路径
+            model_path=model_path  # 预训练的模型的路径
         )
 
-        solver = ImageCaptionSolver(lstm_model, small_data,
-                                            model_path='model/lstm_caption.model',
-                                            optimize_mode='Adam',
-                                            num_epochs=50,
-                                            batch_size=25,
-                                            optim_config={
-                                                'learning_rate': 5e-3,
-                                                'bias_correct':False
-                                            },
-                                            print_log=True,
-                                            print_every=10,
-                                            )
-
+        solver = ImageCaptionSolver(lstm_model, coco_dataset,
+                                    optimize_mode='Adam',
+                                    num_epochs=10,
+                                    batch_size=64,
+                                    optim_config={
+                                        'learning_rate': 5e-3,
+                                        'bias_correct': True
+                                    },
+                                    print_log=True,
+                                    print_every=10,
+                                    )
 
         solver.fit()
 
         # Plot the training losses
-        plt.plot(solver.loss_history)
-        plt.xlabel('Iteration')
-        plt.ylabel('Loss')
-        plt.title('Training loss history')
-        plt.show()
+        # plt.plot(solver.loss_history)
+        # plt.xlabel('Iteration')
+        # plt.ylabel('Loss')
+        # plt.title('Training loss history')
+        # plt.show()
 
-        # 3.测试模型
+        # 3.模型推理
 
-        lstm_model = CaptionLSTM(
+        lstm_model_infer = CaptionLSTM(
+
             use_pre_train=True,
-            model_path = 'model/lstm_caption.model'
+            model_path=model_path  # 预训练的模型的路径
         )
 
+        infer = ImageCaptionSolver(lstm_model_infer, coco_dataset)
 
-        split = 'train' # 训练数据集
+        Type = 'train'  # 训练数据集
+        # Type = 'val'
+        max_length = 20
 
-        minibatch = sample_coco_minibatch(small_data, split=split, batch_size=4)  # 在 small_data 中随机采样
+        test_data = coco_dataset.sample_minibatch(Type=Type, batch_size=4, return_url=True)  # 在 small_data 中随机采样
 
-        origin_captions, features, urls = minibatch
-        origin_captions = decode_captions(origin_captions, small_data['idx_to_word'])
+        origin_captions, features, urls = test_data
 
-        sample_captions = lstm_model.inference_sample(features)
+        references = coco_dataset.decode_captions(origin_captions)
 
-        res_captions = decode_captions(sample_captions, small_data['idx_to_word'])
+        candidates = infer.inference(features, max_length=max_length)
 
-        for gt_caption, sample_caption, url in zip(origin_captions, res_captions, urls):
-            plt.imshow(image_from_url(url))
-            plt.title('%s\n %s\n origin:%s' % (split, sample_caption, gt_caption))
-            plt.axis('off')
-            plt.show()
+        print('candidates: ', candidates)
+        print('references: ', references)
+
+        # for gt_caption, sample_caption, url in zip(origin_captions, res_captions, urls):
+        #     plt.imshow(image_from_url(url))
+        #     plt.title('%s\n %s\n origin:%s' % (Type, sample_caption, gt_caption))
+        #     plt.axis('off')
+        #     plt.show()
+
+    def test_rnn_image_caption_flicker(self):
+
+        # 1.读取训练数据
+
+        flicker_dataset = FlickerDataset(base_dir='../dataset/ImageCaption/')
+
+        # 2. 训练模型
+
+        model_path = 'models/rnn_caption_300_256.model'
+
+        lstm_model = CaptionRNN(
+
+            feature_dim=flicker_dataset.image_feature.shape[1],
+            word_to_idx=flicker_dataset.vocab_obj.word_to_id,
+            hidden_dim=300,
+            wordvec_dim=256,
+            use_pre_train=False,
+            model_path=model_path  # 预训练的模型的路径
+        )
+
+        trainer = ImageCaptionSolver(lstm_model, flicker_dataset,
+                                    optimize_mode='Adam',
+                                    num_epochs=20,
+                                    batch_size=64,
+                                    optim_config={
+                                        'learning_rate': 5e-3,
+                                        'bias_correct': True
+                                    },
+                                    print_log=True,
+                                    print_every=10,
+                                    )
+
+        trainer.fit()
+
+        # Plot the training losses
+        # plt.plot(solver.loss_history)
+        # plt.xlabel('Iteration')
+        # plt.ylabel('Loss')
+        # plt.title('Training loss history')
+        # plt.show()
+
+        # 3.模型推理
+
+        lstm_model_infer = CaptionRNN(
+
+            feature_dim=flicker_dataset.image_feature.shape[1],
+            word_to_idx=flicker_dataset.vocab_obj.word_to_id,
+            hidden_dim=300,
+            wordvec_dim=256,
+            use_pre_train=True,
+            model_path=model_path  # 预训练的模型的路径
+        )
+
+        infer = ImageCaptionSolver(lstm_model_infer, flicker_dataset)
+
+        image_caption_dict = flicker_dataset.data_process.load_image_caption_dict()
+
+        image_dir_list = list(image_caption_dict.keys())
+
+        m = 1619  # 测试数据集的图片个数
+
+        image_dir_batch = image_dir_list[:m]
+
+        print('test image num:{}'.format(len(image_dir_batch)))
+
+        batch_image_feature = np.array(
+            [list(image_caption_dict[image_dir]['feature']) for image_dir in image_dir_batch])
+
+        references = [image_caption_dict[image_dir]['caption'] for image_dir in image_dir_batch]
+
+        candidates = infer.inference(batch_image_feature, max_length=20)
+
+        # print('candidates: ', candidates)
+        # print('reference: ', references)
+
+        evaluate_obj = Evaluate()
+
+        bleu_score, _ = evaluate_obj.evaluate_bleu(references, candidates)
+
+        print('bleu_score:{}'.format(bleu_score))
+
+
+    def test_lstm_image_caption_flicker(self):
+
+        # 1.读取训练数据
+
+        flicker_dataset = FlickerDataset(base_dir='../dataset/ImageCaption/')
+
+        # 2. 训练模型
+
+        model_path = 'models/lstm_caption_512_512.model'
+
+        lstm_model = CaptionLSTM(
+
+            feature_dim=flicker_dataset.image_feature.shape[1],
+            word_to_idx=flicker_dataset.vocab_obj.word_to_id,
+            # dtype=np.float64,
+            hidden_dim=512,
+            wordvec_dim=512,
+            use_pre_train=False,
+            model_path=model_path  # 预训练的模型的路径
+        )
+
+        # trainer = ImageCaptionSolver(lstm_model, flicker_dataset,
+        #                             optimize_mode='Adam',
+        #                             num_epochs=50,
+        #                             batch_size=128,
+        #                             optim_config={
+        #                                 'learning_rate': 5e-3,
+        #                                 'bias_correct': False
+        #                             },
+        #                             print_log=True,
+        #                             print_every=10,
+        #                             )
+
+        # trainer.fit()
+
+        # Plot the training losses
+        # plt.plot(trainer.loss_history)
+        # plt.xlabel('Iteration')
+        # plt.ylabel('Loss')
+        # plt.title('Training loss history')
+        # plt.show()
+
+        # 3.模型推理
+
+        lstm_model_infer = CaptionLSTM(
+
+            use_pre_train=True,
+            model_path=model_path  # 预训练的模型的路径
+        )
+
+        infer = ImageCaptionSolver(lstm_model_infer, flicker_dataset)
+
+        image_caption_dict = flicker_dataset.data_process.load_image_caption_dict()
+
+        image_dir_list = list(image_caption_dict.keys())
+
+        m = 1619  # 测试数据集的图片个数
+        max_length = 30
+
+        image_dir_batch = image_dir_list[:m]
+
+        print('test image num:{}'.format(len(image_dir_batch)))
+
+        batch_image_feature = np.array(
+            [list(image_caption_dict[image_dir]['feature']) for image_dir in image_dir_batch])
+
+        references = [image_caption_dict[image_dir]['caption'] for image_dir in image_dir_batch]
+
+        candidates = infer.inference(batch_image_feature, max_length=max_length)
+
+        print('candidates: ', candidates[0:10])
+
+        print('reference: ', references[0:10])
+
+        evaluate_obj = Evaluate()
+
+        bleu_score, _ = evaluate_obj.evaluate_bleu(references, candidates)
+
+        print('bleu_score:{}'.format(bleu_score))
 
 if __name__ == '__main__':
-
     test = Test()
 
-    test.test_lstm_image_caption()
+    # test.test_rnn_image_caption_microsoft_coco()
 
+    test.test_lstm_image_caption_microsoft_coco()
 
+    # test.test_rnn_image_caption_flicker()
+
+    # test.test_lstm_image_caption_flicker()
