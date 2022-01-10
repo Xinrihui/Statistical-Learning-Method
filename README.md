@@ -41,7 +41,11 @@
 > LDA
 
 
-6.线性模型( [Liner_Models](Liner_Models) ): LinerRegression, logisticRegression
+6.线性模型( [Liner_Models](Liner_Models) )
+
+> LinerRegression
+
+> logisticRegression
 
 7.神经网络模型( [MLP](MLP) )
 
@@ -57,7 +61,13 @@
 
 >> 优化算法: Momentum, Adam
 
-8.深度学习模型( [DNN](DNN) ): CNN, RNN, LSTM
+8.深度学习模型( [DNN](DNN) ): 
+
+> CNN
+
+> RNN
+
+> LSTM
 
 
 ## Ref
