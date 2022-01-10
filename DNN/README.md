@@ -1,8 +1,9 @@
 
 # 深度神经网络模型(Deep Neural Networks, DNN)
 
-
 ![avatar](docs/images/numpy_logo.png) 
+
+使用 Numpy 实现了 3 种经典的深度神经网络模型, 包括 RNN, LSTM, CNN
 
 
 ## 项目结构
@@ -14,7 +15,8 @@
     ├── models                  # 模型的检查点
     ├── ref                     # 参考项目
     ├── src_bak                 # 项目的历史版本的源码
-
+    ├── image_caption_solver_xrh.py # 图片描述生成主程序
+    └── image_classify_solver_xrh.py # 图片分类主程序
 
 ## 1.基于 RNN/LSTM 的图片描述生成 (Image Caption)
 
