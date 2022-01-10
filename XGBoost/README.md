@@ -140,7 +140,13 @@
 | xgboost v3 |error_rate_threshold=0.01,max_iter=20,max_depth=3,learning_rate=1.0,gama=0.0,reg_lambda=0.0| 0.837 | 7035s  |
 
 
-## 3.Ref
+## Ref
 
 1. XGBoost: A Scalable Tree Boosting System
 2. https://github.com/dmlc/xgboost/
+
+## Note
+
+1. 相关数据集下载详见: [dataset/readme.txt](dataset/readme.txt)
+
+2. 软件环境 [Requirements](requirements.txt)
