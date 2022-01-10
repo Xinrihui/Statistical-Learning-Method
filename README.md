@@ -1,6 +1,8 @@
 
 # 李航《统计学习方法》和 深度学习 的相关算法实现
 
+![avatar](docs/images/numpy_logo.png) 
+
 使用 Python + Numpy 实现传统的机器学习模型和深度学习模型
 
 > 模型实现仅使用 Numpy, 并利用 sklearn 中的评价函数对模型效果进行评价
