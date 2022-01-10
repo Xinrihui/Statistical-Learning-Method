@@ -120,20 +120,18 @@ test |  |   |
 
 ### 2.2 实验结果
 
-    1.Mnist 数据集(多分类)
-    
-        n_train = 60000
-        n_test = 10000
-    
-        使用 relu 激活函数
-        使用 Adam 梯度下降, beta1 = 0.9, beta2 = 0.999
-        mini_batch_size = 512
-        num_epochs=5
-        learning_rate= 5e-3
-    
-        test accuracy：0.9823
-        train accuracy : 0.9865
-        训练时长： 514s
+1.Mnist 数据集(多分类)
+
+> 训练集样本数量：60000 
+
+> 测试集样本数量：10000
+
+| 版本  |   超参数  | train Accuracy | test Accuracy |训练时长 |
+| ---------- | -----------| -----------| -----------|-----------|
+| LeNet-5 |relu, Adam(beta1 = 0.9, beta2 = 0.999), mini_batch_size = 512, num_epochs=5, learning_rate= 5e-3| 0.986 |0.982 | 514s  |
+
+
+
 
 ### 2.3 Ref
 
